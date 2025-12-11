@@ -100,6 +100,31 @@
             pointer-events: none;
         }
         
+        /* Photo Caption */
+        #photo-caption {
+            position: absolute; bottom: 18%; left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-family: 'Cinzel', serif;
+            font-size: 36px;
+            font-weight: 700;
+            text-shadow: 0 0 15px rgba(212, 175, 55, 0.8), 0 0 30px rgba(0,0,0,0.8);
+            text-align: center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.8s ease, transform 0.8s ease;
+            z-index: 20;
+            letter-spacing: 4px;
+        }
+        .caption-visible {
+            opacity: 1 !important;
+            transform: translateX(-50%) translateY(0px) !important;
+        }
+        .caption-hidden {
+            opacity: 0 !important;
+            transform: translateX(-50%) translateY(20px) !important;
+        }
+        
         #file-input { display: none; }
 
         /* Webcam feedback */
@@ -153,6 +178,7 @@
         </div>
     </div>
     
+    <div id="photo-caption" class="caption-hidden"></div>
     <div id="status-indicator">Waiting for camera...</div>
 
     <div id="webcam-wrapper">
@@ -189,6 +215,7 @@
         const STATE = {
             mode: 'TREE', // 'TREE', 'SCATTER', 'FOCUS'
             focusTarget: null, // THREE.Group of the selected photo
+            focusName: '',
             hand: { detected: false, x: 0, y: 0 },
             rotation: { x: 0, y: 0 },
             lastGesture: 'NONE', // Track last stable gesture
@@ -206,13 +233,15 @@
 
         // DOM Elements
         const statusIndicator = document.getElementById('status-indicator');
+        const captionEl = document.getElementById('photo-caption');
 
         // --- PARTICLE CLASS (FIXED) ---
         class Particle {
-            constructor(mesh, type, isDust = false) {
+            constructor(mesh, type, isDust = false, name = "") {
                 this.mesh = mesh;
                 this.type = type;
                 this.isDust = isDust;
+                this.name = name; // Name of the person/photo
                 this.isDrawn = false; 
                 
                 this.posTree = new THREE.Vector3();
@@ -268,8 +297,12 @@
                     target.copy(this.posTree);
                 } else if (mode === 'FOCUS') {
                     if (this.mesh === focusTargetMesh) {
-                        // Move selected photo to front
-                        const desiredWorldPos = new THREE.Vector3(0, 2, CONFIG.camera.z - 10);
+                        // Move selected photo to front-and-center
+                        // We use the inverse world matrix of the parent group to find the local position
+                        // that corresponds to (0, 0, camera.z - 8) in world space.
+                        const desiredWorldPos = new THREE.Vector3(0, 1.5, CONFIG.camera.z - 8);
+                        
+                        // NOTE: mainGroup.matrixWorld must be updated before this call (handled in animate)
                         const invMatrix = new THREE.Matrix4().copy(mainGroup.matrixWorld).invert();
                         target.copy(desiredWorldPos.applyMatrix4(invMatrix));
                         opacity = 1.0;
@@ -286,19 +319,17 @@
                             opacity = 0.4;
                         } else {
                             // Dust/Ornaments
-                            opacity = 0.0;
+                            opacity = 0.02; // Very faint background
                         }
                     }
                 }
                 
-                // 2. Opacity Update (Fix for THREE.Group crashing)
-                // Recursive function to handle both Meshes and Groups
+                // 2. Opacity Update
                 const updateMaterialOpacity = (obj, targetOp) => {
                     if (obj.material && obj.material.transparent) {
                         obj.material.opacity = THREE.MathUtils.lerp(obj.material.opacity, targetOp, 5 * dt);
                     }
                 };
-
                 if (this.mesh.isGroup) {
                     this.mesh.traverse((child) => {
                         if (child.isMesh) updateMaterialOpacity(child, opacity);
@@ -307,9 +338,8 @@
                     updateMaterialOpacity(this.mesh, opacity);
                 }
 
-
                 // 3. Movement Easing
-                const lerpSpeed = (mode === 'FOCUS' && this.mesh === focusTargetMesh) ? 5.0 : 2.0; 
+                const lerpSpeed = (mode === 'FOCUS' && this.mesh === focusTargetMesh) ? 4.0 : 2.0; 
                 this.mesh.position.lerp(target, lerpSpeed * dt);
 
                 // 4. Rotation Logic
@@ -324,7 +354,18 @@
                 }
                 
                 if (mode === 'FOCUS' && this.mesh === focusTargetMesh) {
-                    this.mesh.quaternion.slerp(camera.quaternion, 5 * dt);
+                    // CRITICAL FIX: Counter-rotate against the parent group to face the camera.
+                    // 1. Get Camera's world quaternion (looking down -Z usually)
+                    const targetWorldQ = camera.quaternion.clone();
+                    
+                    // 2. Get Parent's inverse world quaternion
+                    const parentInvQ = mainGroup.quaternion.clone().invert();
+                    
+                    // 3. Multiply: LocalQ = ParentInvQ * WorldQ
+                    const targetLocalQ = parentInvQ.multiply(targetWorldQ);
+                    
+                    // 4. Smoothly rotate towards this local quaternion
+                    this.mesh.quaternion.slerp(targetLocalQ, 6 * dt);
                 }
 
                 // 5. Scale Logic
@@ -341,7 +382,7 @@
                 } else if (mode === 'SCATTER' && this.type === 'PHOTO') {
                     s = this.baseScale * 2.5; 
                 } else if (mode === 'FOCUS') {
-                    if (this.mesh === focusTargetMesh) s = 4.5; 
+                    if (this.mesh === focusTargetMesh) s = 5.5; // Bigger for focus
                     else s = 0.0; 
                 }
                 
@@ -361,10 +402,10 @@
             setupPostProcessing();
             setupEvents();
             
-            // Start Animation Loop Immediately to prevent black screen if webcam fails
+            // Start Animation Loop Immediately
             animate();
             
-            // Init MediaPipe asynchronously
+            // Init MediaPipe
             try {
                 await initMediaPipe();
             } catch (e) {
@@ -554,10 +595,10 @@
             
             const tex = new THREE.CanvasTexture(canvas);
             tex.colorSpace = THREE.SRGBColorSpace;
-            addPhotoToScene(tex);
+            addPhotoToScene(tex, "Our Memory");
         }
 
-        function addPhotoToScene(texture) {
+        function addPhotoToScene(texture, name = "Untitled") {
             const frameGeo = new THREE.BoxGeometry(1.4, 1.4, 0.05);
             const frameMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.champagneGold, metalness: 1.0, roughness: 0.1, transparent: true });
             const frame = new THREE.Mesh(frameGeo, frameMat);
@@ -576,7 +617,8 @@
             
             photoMeshGroup.add(group);
             
-            const p = new Particle(group, 'PHOTO', false);
+            // Pass name to Particle
+            const p = new Particle(group, 'PHOTO', false, name);
             particleSystem.push(p);
             photoParticles.push(p);
         }
@@ -585,11 +627,13 @@
             const files = e.target.files;
             if(!files.length) return;
             Array.from(files).forEach(f => {
+                // Extract name without extension
+                const name = f.name.replace(/\.[^/.]+$/, "");
                 const reader = new FileReader();
                 reader.onload = (ev) => {
                     new THREE.TextureLoader().load(ev.target.result, (t) => {
                         t.colorSpace = THREE.SRGBColorSpace;
-                        addPhotoToScene(t);
+                        addPhotoToScene(t, name);
                     });
                 }
                 reader.readAsDataURL(f);
@@ -717,11 +761,22 @@
             
             drawnParticle.isDrawn = true;
             STATE.focusTarget = drawnParticle.mesh;
+            STATE.focusName = drawnParticle.name;
         }
 
         function updateStatusIndicator(mode, gesture) {
             let text = 'Waiting...';
             statusIndicator.style.opacity = 1.0;
+            
+            // Handle Caption Display
+            if (mode === 'FOCUS' && STATE.focusTarget) {
+                captionEl.textContent = STATE.focusName;
+                captionEl.classList.remove('caption-hidden');
+                captionEl.classList.add('caption-visible');
+            } else {
+                captionEl.classList.remove('caption-visible');
+                captionEl.classList.add('caption-hidden');
+            }
 
             if (mode === 'TREE') {
                 text = '🟢 Happy Christmas! 🔴';
@@ -731,7 +786,7 @@
                  if (photoParticles.filter(p => !p.isDrawn).length === 0) {
                     text = '🎉 The end';
                  } else {
-                    text = '🔴🟢 Searching (' + photoParticles.filter(p => p.isDrawn).length + '/' + photoParticles.length + ')';
+                    text = '🎁 Gift Selected';
                  }
             } else if (mode === 'FINISH') {
                 text = '🎉 The end, Happy Christmas!';
@@ -784,6 +839,9 @@
 
             mainGroup.rotation.y = STATE.rotation.y;
             mainGroup.rotation.x = STATE.rotation.x;
+            
+            // Force update matrix so that world position calculations in Particle.update are accurate for this frame
+            mainGroup.updateMatrixWorld();
 
             particleSystem.forEach(p => p.update(dt, STATE.mode, STATE.focusTarget));
             
