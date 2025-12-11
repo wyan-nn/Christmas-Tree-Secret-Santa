@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secret Santa</title>
+    <title>Secret Santa - Fixed</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000000; font-family: 'Times New Roman', serif; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
@@ -16,6 +16,7 @@
             align-items: center;
             padding-top: 40px;
             box-sizing: border-box;
+            transition: opacity 0.5s ease;
         }
         
         .ui-hidden { opacity: 0; pointer-events: none !important; }
@@ -47,7 +48,6 @@
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
             font-family: 'Cinzel', 'Times New Roman', serif;
             opacity: 0.9;
-            transition: opacity 0.5s ease;
         }
 
         /* Upload Button - Restored & Elegant */
@@ -76,8 +76,8 @@
             box-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
         }
         .hint-text {
-            color: rgba(212, 175, 55, 0.8); /* 提高对比度 */
-            font-size: 10px; /* 稍大一点 */
+            color: rgba(212, 175, 55, 0.8); 
+            font-size: 10px;
             margin-top: 8px;
             letter-spacing: 1px;
             text-transform: uppercase;
@@ -105,10 +105,10 @@
         /* Webcam feedback */
         #webcam-wrapper {
             position: absolute; bottom: 40px; right: 40px;
-            width: 160px; height: 120px; /* 调整尺寸以匹配预测 Canvas */
+            width: 160px; height: 120px;
             border: 1px solid rgba(255,255,255,0.1);
             overflow: hidden; 
-            opacity: 0.4; /* 略微透明，不分散注意力 */
+            opacity: 0.4;
             pointer-events: none;
             transition: opacity 0.5s ease;
         }
@@ -147,17 +147,17 @@
                 <input type="file" id="file-input" multiple accept="image/*">
             </label>
             <div class="hint-text">
-                <p>握拳：变回圣诞树 | 打开手掌：散开粒子 | 捏合：抽取礼物</p>
-                <p>按 'H' 隐藏控制面板</p>
+                <p>Fist: Tree | Open Hand: Scatter | Pinch: Pick Gift</p>
+                <p>Press 'H' to hide UI</p>
             </div>
         </div>
     </div>
     
-    <div id="status-indicator">等待手势...</div>
+    <div id="status-indicator">Waiting for camera...</div>
 
     <div id="webcam-wrapper">
         <video id="webcam" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
-        </div>
+    </div>
 
     <script type="module">
         import * as THREE from 'three';
@@ -207,13 +207,13 @@
         // DOM Elements
         const statusIndicator = document.getElementById('status-indicator');
 
-        // --- PARTICLE CLASS (UPDATED) ---
+        // --- PARTICLE CLASS (FIXED) ---
         class Particle {
             constructor(mesh, type, isDust = false) {
                 this.mesh = mesh;
                 this.type = type;
                 this.isDust = isDust;
-                this.isDrawn = false; // NEW: Photo drawing status
+                this.isDrawn = false; 
                 
                 this.posTree = new THREE.Vector3();
                 this.posScatter = new THREE.Vector3();
@@ -229,7 +229,7 @@
 
                 this.calculatePositions();
                 
-                // 🌟 FIX 1: 确保粒子在初始化时立即位于 TREE 位置 🌟
+                // Set initial position
                 this.mesh.position.copy(this.posTree);
             }
 
@@ -258,53 +258,66 @@
             }
 
             update(dt, mode, focusTargetMesh) {
-                let target = this.posTree;
+                // 1. Determine Target Position (Use clone to avoid mutation!)
+                let target = new THREE.Vector3();
                 let opacity = 1.0;
                 
-                if (mode === 'SCATTER') target = this.posScatter;
-                else if (mode === 'FOCUS') {
+                if (mode === 'SCATTER') {
+                    target.copy(this.posScatter);
+                } else if (mode === 'TREE') {
+                    target.copy(this.posTree);
+                } else if (mode === 'FOCUS') {
                     if (this.mesh === focusTargetMesh) {
-                        // Move to front of camera
+                        // Move selected photo to front
                         const desiredWorldPos = new THREE.Vector3(0, 2, CONFIG.camera.z - 10);
                         const invMatrix = new THREE.Matrix4().copy(mainGroup.matrixWorld).invert();
-                        target = desiredWorldPos.applyMatrix4(invMatrix);
+                        target.copy(desiredWorldPos.applyMatrix4(invMatrix));
                         opacity = 1.0;
                     } else {
-                        // Fading out other photos/particles in FOCUS mode
-                        target = this.posScatter;
-                        opacity = this.isDrawn ? 0.1 : 0.8; 
+                        // Background particles
+                        target.copy(this.posScatter);
                         
                         if (this.type === 'PHOTO' && this.isDrawn) {
-                            // Already drawn photos move far away and become translucent
+                            // Previously drawn photos float further back
                             target.multiplyScalar(2.0); 
                             opacity = 0.05; 
                         } else if (this.type === 'PHOTO') {
-                            // Undrawn photos stay in scatter state, slightly faded
+                            // Undrawn photos
                             opacity = 0.4;
                         } else {
-                            // Regular particles/dust fade out
+                            // Dust/Ornaments
                             opacity = 0.0;
                         }
                     }
                 }
                 
-                // Opacity Update for Meshes (Only if material allows)
-                if (this.mesh.material.transparent === true) {
-                    this.mesh.material.opacity = THREE.MathUtils.lerp(this.mesh.material.opacity, opacity, 5 * dt);
+                // 2. Opacity Update (Fix for THREE.Group crashing)
+                // Recursive function to handle both Meshes and Groups
+                const updateMaterialOpacity = (obj, targetOp) => {
+                    if (obj.material && obj.material.transparent) {
+                        obj.material.opacity = THREE.MathUtils.lerp(obj.material.opacity, targetOp, 5 * dt);
+                    }
+                };
+
+                if (this.mesh.isGroup) {
+                    this.mesh.traverse((child) => {
+                        if (child.isMesh) updateMaterialOpacity(child, opacity);
+                    });
+                } else {
+                    updateMaterialOpacity(this.mesh, opacity);
                 }
 
 
-                // Movement Easing
+                // 3. Movement Easing
                 const lerpSpeed = (mode === 'FOCUS' && this.mesh === focusTargetMesh) ? 5.0 : 2.0; 
                 this.mesh.position.lerp(target, lerpSpeed * dt);
 
-                // Rotation Logic
+                // 4. Rotation Logic
                 if (mode === 'SCATTER') {
                     this.mesh.rotation.x += this.spinSpeed.x * dt;
                     this.mesh.rotation.y += this.spinSpeed.y * dt;
                     this.mesh.rotation.z += this.spinSpeed.z * dt;
                 } else if (mode === 'TREE') {
-                    // Reset rotations slowly
                     this.mesh.rotation.x = THREE.MathUtils.lerp(this.mesh.rotation.x, 0, dt);
                     this.mesh.rotation.z = THREE.MathUtils.lerp(this.mesh.rotation.z, 0, dt);
                     this.mesh.rotation.y += 0.5 * dt; 
@@ -314,54 +327,56 @@
                     this.mesh.quaternion.slerp(camera.quaternion, 5 * dt);
                 }
 
-                // Scale Logic
+                // 5. Scale Logic
                 let s = this.baseScale;
                 if (this.isDust) {
-                    // General pulsating scale
                     const pulseScale = (0.8 + 0.4 * Math.sin(clock.elapsedTime * 4 + this.mesh.id));
-
                     if (mode === 'TREE') {
-                        // 🌟 FIX 2: 保持 DUST 可见，使其作为闪烁的背景星光 🌟
                         s = this.baseScale * pulseScale * 0.4; 
                     } else if (mode === 'SCATTER') {
                          s = this.baseScale * pulseScale;
-                    } else { // FOCUS mode
-                        s = 0; // Dust disappears in FOCUS mode
+                    } else { 
+                        s = 0; 
                     }
                 } else if (mode === 'SCATTER' && this.type === 'PHOTO') {
                     s = this.baseScale * 2.5; 
                 } else if (mode === 'FOCUS') {
                     if (this.mesh === focusTargetMesh) s = 4.5; 
-                    else s = 0.0; // Other particles disappear
+                    else s = 0.0; 
                 }
                 
                 this.mesh.scale.lerp(new THREE.Vector3(s,s,s), 4*dt);
             }
         }
 
-        // --- INIT FUNCTIONS (Kept mostly the same) ---
+        // --- INIT FUNCTIONS ---
         async function init() {
             initThree();
             setupEnvironment(); 
             setupLights();
             createTextures();
-            createParticles(); // Creates main group
+            createParticles(); 
             createDust();     
-            createDefaultPhotos(); // Adds a single default photo
+            createDefaultPhotos(); 
             setupPostProcessing();
             setupEvents();
-            await initMediaPipe();
+            
+            // Start Animation Loop Immediately to prevent black screen if webcam fails
+            animate();
+            
+            // Init MediaPipe asynchronously
+            try {
+                await initMediaPipe();
+            } catch (e) {
+                console.error("MediaPipe failed to load:", e);
+                statusIndicator.textContent = "Gesture control unavailable";
+            }
             
             // Hide Loader
             const loader = document.getElementById('loader');
             loader.style.opacity = 0;
             setTimeout(() => loader.remove(), 800);
-            
-            // Start Animation Loop
-            animate();
         }
-
-        // ... (initThree, setupEnvironment, setupLights, setupPostProcessing, createTextures remain unchanged) ...
 
         function initThree() {
             const container = document.getElementById('canvas-container');
@@ -516,7 +531,6 @@
 
         function createDust() {
             const geo = new THREE.TetrahedronGeometry(0.08, 0);
-            // Must set transparent to true for opacity to work
             const mat = new THREE.MeshBasicMaterial({ color: 0xffeebb, transparent: true, opacity: 0.8 }); 
             
             for(let i=0; i<CONFIG.particles.dustCount; i++) {
@@ -543,14 +557,12 @@
             addPhotoToScene(tex);
         }
 
-        // UPDATED: Add Photo logic
         function addPhotoToScene(texture) {
             const frameGeo = new THREE.BoxGeometry(1.4, 1.4, 0.05);
-            const frameMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.champagneGold, metalness: 1.0, roughness: 0.1 });
+            const frameMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.champagneGold, metalness: 1.0, roughness: 0.1, transparent: true });
             const frame = new THREE.Mesh(frameGeo, frameMat);
 
             const photoGeo = new THREE.PlaneGeometry(1.2, 1.2);
-            // Must set transparent: true for FOCUS mode fading
             const photoMat = new THREE.MeshBasicMaterial({ map: texture, transparent: true }); 
             const photo = new THREE.Mesh(photoGeo, photoMat);
             photo.position.z = 0.04;
@@ -566,7 +578,7 @@
             
             const p = new Particle(group, 'PHOTO', false);
             particleSystem.push(p);
-            photoParticles.push(p); // Add to the dedicated photo list
+            photoParticles.push(p);
         }
         
         function handleImageUpload(e) {
@@ -584,11 +596,10 @@
             });
         }
 
-        // --- MEDIAPIPE (UPDATED) ---
+        // --- MEDIAPIPE ---
         async function initMediaPipe() {
             video = document.getElementById('webcam');
-            // webcamCanvas/Ctx removed as we predict directly on video element
-
+            
             const vision = await FilesetResolver.forVisionTasks(
                 "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
             );
@@ -610,7 +621,7 @@
                 });
             } else {
                  console.warn("Webcam not available.");
-                 statusIndicator.textContent = '无法获取摄像头，手势控制已禁用。';
+                 statusIndicator.textContent = 'Webcam unavailable. Controls disabled.';
             }
         }
 
@@ -619,7 +630,6 @@
             if (video.currentTime !== lastVideoTime) {
                 lastVideoTime = video.currentTime;
                 if (handLandmarker) {
-                    // HandLandmarker's aspect ratio calculation can be problematic, use constant size for video frame.
                     const now = performance.now();
                     const result = handLandmarker.detectForVideo(video, now);
                     processGestures(result);
@@ -628,15 +638,12 @@
             requestAnimationFrame(predictWebcam);
         }
         
-        // NEW: Gesture processing logic
         function processGestures(result) {
             if (result.landmarks && result.landmarks.length > 0) {
                 STATE.hand.detected = true;
-                const lm = result.landmarks[0]; // First hand
+                const lm = result.landmarks[0]; 
 
-                // Normalize index finger position for screen rotation control
-                // lm[9] is the wrist knuckle (MCP joint for middle finger)
-                // lm[0] is the true wrist
+                // Mapping coordinates
                 STATE.hand.x = (lm[9].x - 0.5) * 2; 
                 STATE.hand.y = (lm[9].y - 0.5) * 2;
                 
@@ -650,10 +657,9 @@
                 
                 // 1. Pinch (Draw/Focus)
                 const pinchDist = Math.hypot(thumb.x - index.x, thumb.y - index.y, thumb.z - index.z);
-                const isPinching = pinchDist < 0.04; // Very close distance
+                const isPinching = pinchDist < 0.04; 
                 
                 // 2. Open vs. Closed
-                // Calculate average distance of fingertips to wrist
                 const tipDists = [
                     Math.hypot(index.x - wrist.x, index.y - wrist.y),
                     Math.hypot(middle.x - wrist.x, middle.y - wrist.y),
@@ -662,9 +668,8 @@
                 ];
                 const avgTipDist = tipDists.reduce((a, b) => a + b, 0) / tipDists.length;
 
-                // Thresholds based on normalized 0 to 1 coordinates (from video frame)
-                const OPEN_THRESHOLD = 0.45; // Wide open
-                const CLOSED_THRESHOLD = 0.20; // Clenched
+                const OPEN_THRESHOLD = 0.45; 
+                const CLOSED_THRESHOLD = 0.20; 
 
                 let newMode = STATE.mode;
                 let newGesture = STATE.lastGesture;
@@ -673,8 +678,8 @@
                     newMode = 'FOCUS';
                     newGesture = 'PINCH';
                     handlePinchDraw();
-                    STATE.canPinch = false; // Start cooldown
-                    setTimeout(() => STATE.canPinch = true, 3000); // 3-second cooldown
+                    STATE.canPinch = false; 
+                    setTimeout(() => STATE.canPinch = true, 3000); 
                 } else if (avgTipDist > OPEN_THRESHOLD && !isPinching) {
                     newMode = 'SCATTER';
                     newGesture = 'OPEN_PALM';
@@ -683,11 +688,8 @@
                     newMode = 'TREE';
                     newGesture = 'CLOSED_FIST';
                     STATE.focusTarget = null;
-                } else if (STATE.mode === 'FOCUS' && !isPinching) {
-                    // Stay in FOCUS mode until a clear TREE/SCATTER signal
                 }
                 
-                // Update State and Indicator
                 STATE.mode = newMode;
                 if (newGesture !== STATE.lastGesture || STATE.mode === 'FOCUS') {
                     STATE.lastGesture = newGesture;
@@ -701,7 +703,6 @@
             }
         }
         
-        // NEW: Handles the core gift drawing logic
         function handlePinchDraw() {
             const undrawnPhotos = photoParticles.filter(p => !p.isDrawn);
             
@@ -711,15 +712,11 @@
                 return;
             }
 
-            // 1. Randomly select an undrawn photo
             const randomIndex = Math.floor(Math.random() * undrawnPhotos.length);
             const drawnParticle = undrawnPhotos[randomIndex];
             
-            // 2. Mark it as drawn and set it as the focus target
             drawnParticle.isDrawn = true;
             STATE.focusTarget = drawnParticle.mesh;
-            
-            console.log(`Drawn photo with mesh ID: ${drawnParticle.mesh.id}`);
         }
 
         function updateStatusIndicator(mode, gesture) {
@@ -737,7 +734,7 @@
                     text = '🔴🟢 Searching (' + photoParticles.filter(p => p.isDrawn).length + '/' + photoParticles.length + ')';
                  }
             } else if (mode === 'FINISH') {
-                text = '🎉 The end,Happy Christmas!';
+                text = '🎉 The end, Happy Christmas!';
             } else {
                 statusIndicator.style.opacity = 0.5;
             }
@@ -754,12 +751,11 @@
             });
             document.getElementById('file-input').addEventListener('change', handleImageUpload);
             
-            // Toggle UI logic
             window.addEventListener('keydown', (e) => {
                 if (e.key.toLowerCase() === 'h') {
                     const uiLayer = document.getElementById('ui-layer');
                     const indicator = document.getElementById('status-indicator');
-                    if (uiLayer) uiLayer.classList.toggle('ui-hidden'); // Hide the entire UI layer (title + controls)
+                    if (uiLayer) uiLayer.classList.toggle('ui-hidden'); 
                     if (indicator) indicator.classList.toggle('ui-hidden');
                 }
             });
@@ -769,29 +765,23 @@
             requestAnimationFrame(animate);
             const dt = clock.getDelta();
 
-            // Rotation Logic: Tree/Scatter rotation based on hand X/Y
             let targetRotY = 0;
             let targetRotX = 0;
 
             if (STATE.mode === 'SCATTER' && STATE.hand.detected) {
-                // Hand movement controls rotation in SCATTER mode
                 targetRotY = STATE.hand.x * Math.PI * 0.9; 
                 targetRotX = STATE.hand.y * Math.PI * 0.25;
             } else if (STATE.mode === 'TREE') {
-                // Gentle automatic rotation in TREE mode
                 targetRotY = STATE.rotation.y + 0.3 * dt;
                 targetRotX = 0;
             } else if (STATE.mode === 'FOCUS') {
-                // Slow rotation in FOCUS mode
                 targetRotY = STATE.rotation.y + 0.1 * dt; 
                 targetRotX = 0;
             }
 
-            // Smoothly interpolate rotation state
             STATE.rotation.y = THREE.MathUtils.lerp(STATE.rotation.y, targetRotY, 3.0 * dt);
             STATE.rotation.x = THREE.MathUtils.lerp(STATE.rotation.x, targetRotX, 3.0 * dt);
 
-            // Apply rotation to the main group
             mainGroup.rotation.y = STATE.rotation.y;
             mainGroup.rotation.x = STATE.rotation.x;
 
