@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>圣诞礼物抽奖树 - 手势控制</title>
+    <title>Secret Santa</title>
     <style>
-        /* 样式代码保持不变，增加了 FOCUS 提示 */
         body { margin: 0; overflow: hidden; background-color: #000000; font-family: 'Times New Roman', serif; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
         
@@ -144,7 +143,7 @@
         
         <div class="upload-wrapper">
             <label class="upload-btn">
-                上传同事照片 (Add Photos)
+                Add Photos
                 <input type="file" id="file-input" multiple accept="image/*">
             </label>
             <div class="hint-text">
@@ -173,17 +172,17 @@
             colors: {
                 bg: 0x000000, 
                 champagneGold: 0xffd966, 
-                deepGreen: 0x03180a,     
-                accentRed: 0x990000,     
+                deepGreen: 0x03180a,      
+                accentRed: 0x990000,      
             },
             particles: {
-                count: 1500,     
-                dustCount: 2500, 
-                treeHeight: 24,  
+                count: 1500,      
+                dustCount: 2500,  
+                treeHeight: 24,   
                 treeRadius: 8    
             },
             camera: {
-                z: 50 
+                z: 50
             }
         };
 
@@ -229,6 +228,9 @@
                 );
 
                 this.calculatePositions();
+                
+                // 🌟 FIX 1: 确保粒子在初始化时立即位于 TREE 位置 🌟
+                this.mesh.position.copy(this.posTree);
             }
 
             calculatePositions() {
@@ -315,9 +317,17 @@
                 // Scale Logic
                 let s = this.baseScale;
                 if (this.isDust) {
-                    s = this.baseScale * (0.8 + 0.4 * Math.sin(clock.elapsedTime * 4 + this.mesh.id));
-                    if (mode === 'TREE') s = 0; 
-                    if (mode === 'FOCUS') s = 0; // Dust disappears in FOCUS mode
+                    // General pulsating scale
+                    const pulseScale = (0.8 + 0.4 * Math.sin(clock.elapsedTime * 4 + this.mesh.id));
+
+                    if (mode === 'TREE') {
+                        // 🌟 FIX 2: 保持 DUST 可见，使其作为闪烁的背景星光 🌟
+                        s = this.baseScale * pulseScale * 0.4; 
+                    } else if (mode === 'SCATTER') {
+                         s = this.baseScale * pulseScale;
+                    } else { // FOCUS mode
+                        s = 0; // Dust disappears in FOCUS mode
+                    }
                 } else if (mode === 'SCATTER' && this.type === 'PHOTO') {
                     s = this.baseScale * 2.5; 
                 } else if (mode === 'FOCUS') {
@@ -351,7 +361,7 @@
             animate();
         }
 
-        // ... initThree, setupEnvironment, setupLights, setupPostProcessing, createTextures ...
+        // ... (initThree, setupEnvironment, setupLights, setupPostProcessing, createTextures remain unchanged) ...
 
         function initThree() {
             const container = document.getElementById('canvas-container');
@@ -444,7 +454,7 @@
                 color: CONFIG.colors.champagneGold,
                 metalness: 1.0, roughness: 0.1,
                 envMapIntensity: 2.0, 
-                emissive: 0x443300,   
+                emissive: 0x443300,    
                 emissiveIntensity: 0.3
             });
 
@@ -747,9 +757,9 @@
             // Toggle UI logic
             window.addEventListener('keydown', (e) => {
                 if (e.key.toLowerCase() === 'h') {
-                    const controls = document.querySelector('.upload-wrapper');
+                    const uiLayer = document.getElementById('ui-layer');
                     const indicator = document.getElementById('status-indicator');
-                    if (controls) controls.classList.toggle('ui-hidden');
+                    if (uiLayer) uiLayer.classList.toggle('ui-hidden'); // Hide the entire UI layer (title + controls)
                     if (indicator) indicator.classList.toggle('ui-hidden');
                 }
             });
@@ -769,38 +779,24 @@
                 targetRotX = STATE.hand.y * Math.PI * 0.25;
             } else if (STATE.mode === 'TREE') {
                 // Gentle automatic rotation in TREE mode
-                STATE.rotation.y += 0.3 * dt;
-                // Target X is 0
+                targetRotY = STATE.rotation.y + 0.3 * dt;
+                targetRotX = 0;
             } else if (STATE.mode === 'FOCUS') {
-                 // Slow rotation in FOCUS mode
-                 STATE.rotation.y += 0.1 * dt; 
-                 // Target X is 0
+                // Slow rotation in FOCUS mode
+                targetRotY = STATE.rotation.y + 0.1 * dt; 
+                targetRotX = 0;
             }
 
-            // Easing for rotation
+            // Smoothly interpolate rotation state
             STATE.rotation.y = THREE.MathUtils.lerp(STATE.rotation.y, targetRotY, 3.0 * dt);
             STATE.rotation.x = THREE.MathUtils.lerp(STATE.rotation.x, targetRotX, 3.0 * dt);
 
-
-            // Only apply rotation if not in FOCUS on a specific item
-            // If in FOCUS, only the focused item will rotate/lookAt camera
-            if (STATE.mode !== 'FOCUS' || STATE.focusTarget === null) {
-                mainGroup.rotation.y = STATE.rotation.y;
-                mainGroup.rotation.x = STATE.rotation.x;
-            }
-            
-            // If in FOCUS, mainGroup remains static so the focused object is centered relative to camera
-            if (STATE.mode === 'FOCUS' && STATE.focusTarget) {
-                 // Prevent the main group from rotating when a photo is drawn
-                 mainGroup.rotation.y = 0; 
-                 mainGroup.rotation.x = 0; 
-            } else if (STATE.mode === 'FOCUS' && !STATE.focusTarget) {
-                 // Apply a gentle rotation if focus is active but no target (e.g., all drawn)
-                 mainGroup.rotation.y += 0.1 * dt; 
-            }
-            
+            // Apply rotation to the main group
+            mainGroup.rotation.y = STATE.rotation.y;
+            mainGroup.rotation.x = STATE.rotation.x;
 
             particleSystem.forEach(p => p.update(dt, STATE.mode, STATE.focusTarget));
+            
             composer.render();
         }
 
