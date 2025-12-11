@@ -112,9 +112,10 @@
             text-align: center;
             pointer-events: none;
             opacity: 0;
-            transition: opacity 0.8s ease, transform 0.8s ease;
+            transition: opacity 0.8s ease, transform 0.8s ease, top 0.8s ease;
             z-index: 20;
             letter-spacing: 4px;
+            width: 100%;
         }
         .caption-visible {
             opacity: 1 !important;
@@ -123,6 +124,17 @@
         .caption-hidden {
             opacity: 0 !important;
             transform: translateX(-50%) translateY(20px) !important;
+        }
+        /* End Game State Style */
+        .caption-end {
+            top: 50% !important;
+            bottom: auto !important;
+            transform: translate(-50%, -50%) !important;
+            font-size: 50px !important;
+            width: 90%;
+            line-height: 1.4;
+            text-shadow: 0 0 30px rgba(255, 215, 0, 0.8), 0 0 60px rgba(0,0,0,0.9) !important;
+            opacity: 1 !important;
         }
         
         #file-input { display: none; }
@@ -213,7 +225,7 @@
         };
 
         const STATE = {
-            mode: 'TREE', // 'TREE', 'SCATTER', 'FOCUS'
+            mode: 'TREE', // 'TREE', 'SCATTER', 'FOCUS', 'END_GAME'
             focusTarget: null, // THREE.Group of the selected photo
             focusName: '',
             hand: { detected: false, x: 0, y: 0 },
@@ -293,7 +305,8 @@
                 
                 if (mode === 'SCATTER') {
                     target.copy(this.posScatter);
-                } else if (mode === 'TREE') {
+                } else if (mode === 'TREE' || mode === 'END_GAME') {
+                    // Use TREE formation for END_GAME
                     target.copy(this.posTree);
                 } else if (mode === 'FOCUS') {
                     if (this.mesh === focusTargetMesh) {
@@ -347,7 +360,7 @@
                     this.mesh.rotation.x += this.spinSpeed.x * dt;
                     this.mesh.rotation.y += this.spinSpeed.y * dt;
                     this.mesh.rotation.z += this.spinSpeed.z * dt;
-                } else if (mode === 'TREE') {
+                } else if (mode === 'TREE' || mode === 'END_GAME') {
                     this.mesh.rotation.x = THREE.MathUtils.lerp(this.mesh.rotation.x, 0, dt);
                     this.mesh.rotation.z = THREE.MathUtils.lerp(this.mesh.rotation.z, 0, dt);
                     this.mesh.rotation.y += 0.5 * dt; 
@@ -372,7 +385,7 @@
                 let s = this.baseScale;
                 if (this.isDust) {
                     const pulseScale = (0.8 + 0.4 * Math.sin(clock.elapsedTime * 4 + this.mesh.id));
-                    if (mode === 'TREE') {
+                    if (mode === 'TREE' || mode === 'END_GAME') {
                         s = this.baseScale * pulseScale * 0.4; 
                     } else if (mode === 'SCATTER') {
                          s = this.baseScale * pulseScale;
@@ -715,35 +728,52 @@
                 const OPEN_THRESHOLD = 0.45; 
                 const CLOSED_THRESHOLD = 0.20; 
 
-                let newMode = STATE.mode;
-                let newGesture = STATE.lastGesture;
+                let currentGesture = 'NONE';
+                if (isPinching) currentGesture = 'PINCH';
+                else if (avgTipDist > OPEN_THRESHOLD) currentGesture = 'OPEN_PALM';
+                else if (avgTipDist < CLOSED_THRESHOLD) currentGesture = 'CLOSED_FIST';
 
-                if (isPinching && STATE.mode !== 'FOCUS' && STATE.canPinch) {
-                    newMode = 'FOCUS';
-                    newGesture = 'PINCH';
-                    handlePinchDraw();
-                    STATE.canPinch = false; 
-                    setTimeout(() => STATE.canPinch = true, 3000); 
-                } else if (avgTipDist > OPEN_THRESHOLD && !isPinching) {
-                    newMode = 'SCATTER';
-                    newGesture = 'OPEN_PALM';
-                    STATE.focusTarget = null;
-                } else if (avgTipDist < CLOSED_THRESHOLD && !isPinching) {
-                    newMode = 'TREE';
-                    newGesture = 'CLOSED_FIST';
-                    STATE.focusTarget = null;
+                // --- STATE MACHINE ---
+
+                if (STATE.mode === 'END_GAME') {
+                    // Lock to END_GAME state, maybe allow rotation?
+                    // For now, keep it simple.
+                } 
+                else if (STATE.mode === 'FOCUS') {
+                    // STICKY FOCUS: Only return to tree if explicit FIST
+                    if (currentGesture === 'CLOSED_FIST') {
+                        STATE.mode = 'TREE';
+                        STATE.focusTarget = null;
+                        updateStatusIndicator('TREE');
+                    }
+                } 
+                else {
+                    // Normal Navigation (TREE <-> SCATTER -> FOCUS)
+                    if (currentGesture === 'PINCH' && STATE.canPinch) {
+                        handlePinchDraw();
+                        // handlePinchDraw will set mode to FOCUS or END_GAME
+                        STATE.canPinch = false; 
+                        setTimeout(() => STATE.canPinch = true, 3000); 
+                    } else if (currentGesture === 'OPEN_PALM') {
+                        STATE.mode = 'SCATTER';
+                    } else if (currentGesture === 'CLOSED_FIST') {
+                        STATE.mode = 'TREE';
+                    }
                 }
                 
-                STATE.mode = newMode;
-                if (newGesture !== STATE.lastGesture || STATE.mode === 'FOCUS') {
-                    STATE.lastGesture = newGesture;
-                    updateStatusIndicator(STATE.mode, newGesture);
+                if (currentGesture !== STATE.lastGesture && STATE.mode !== 'END_GAME') {
+                    STATE.lastGesture = currentGesture;
+                    // Only update text if not in focus/end game logic handled elsewhere
+                    if(STATE.mode !== 'FOCUS') updateStatusIndicator(STATE.mode, currentGesture);
                 }
 
             } else {
                 STATE.hand.detected = false;
                 STATE.lastGesture = 'NONE';
-                updateStatusIndicator('NONE');
+                // Don't clear status in End Game
+                if (STATE.mode !== 'END_GAME' && STATE.mode !== 'FOCUS') {
+                    updateStatusIndicator('NONE');
+                }
             }
         }
         
@@ -751,8 +781,9 @@
             const undrawnPhotos = photoParticles.filter(p => !p.isDrawn);
             
             if (undrawnPhotos.length === 0) {
+                STATE.mode = 'END_GAME';
                 STATE.focusTarget = null;
-                updateStatusIndicator('FINISH');
+                updateStatusIndicator('END_GAME');
                 return;
             }
 
@@ -760,8 +791,10 @@
             const drawnParticle = undrawnPhotos[randomIndex];
             
             drawnParticle.isDrawn = true;
+            STATE.mode = 'FOCUS'; // Explicitly set mode
             STATE.focusTarget = drawnParticle.mesh;
             STATE.focusName = drawnParticle.name;
+            updateStatusIndicator('FOCUS');
         }
 
         function updateStatusIndicator(mode, gesture) {
@@ -769,12 +802,15 @@
             statusIndicator.style.opacity = 1.0;
             
             // Handle Caption Display
-            if (mode === 'FOCUS' && STATE.focusTarget) {
+            captionEl.classList.remove('caption-visible', 'caption-hidden', 'caption-end');
+            
+            if (mode === 'END_GAME') {
+                captionEl.textContent = '🎉 The end, Happy Christmas!';
+                captionEl.classList.add('caption-end');
+            } else if (mode === 'FOCUS' && STATE.focusTarget) {
                 captionEl.textContent = STATE.focusName;
-                captionEl.classList.remove('caption-hidden');
                 captionEl.classList.add('caption-visible');
             } else {
-                captionEl.classList.remove('caption-visible');
                 captionEl.classList.add('caption-hidden');
             }
 
@@ -783,13 +819,9 @@
             } else if (mode === 'SCATTER') {
                 text = '🟡 Waiting for surprise 🟡';
             } else if (mode === 'FOCUS') {
-                 if (photoParticles.filter(p => !p.isDrawn).length === 0) {
-                    text = '🎉 The end';
-                 } else {
-                    text = '🎁 Gift Selected';
-                 }
-            } else if (mode === 'FINISH') {
-                text = '🎉 The end, Happy Christmas!';
+                 text = '🎁 Gift Selected (Make Fist to Close)';
+            } else if (mode === 'END_GAME') {
+                text = '🎄 Merry Christmas! 🎄';
             } else {
                 statusIndicator.style.opacity = 0.5;
             }
@@ -826,7 +858,7 @@
             if (STATE.mode === 'SCATTER' && STATE.hand.detected) {
                 targetRotY = STATE.hand.x * Math.PI * 0.9; 
                 targetRotX = STATE.hand.y * Math.PI * 0.25;
-            } else if (STATE.mode === 'TREE') {
+            } else if (STATE.mode === 'TREE' || STATE.mode === 'END_GAME') {
                 targetRotY = STATE.rotation.y + 0.3 * dt;
                 targetRotX = 0;
             } else if (STATE.mode === 'FOCUS') {
