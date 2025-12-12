@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -38,6 +38,20 @@
             animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        #reset-btn {
+            margin-top: 30px;
+            padding: 10px 20px;
+            border: 1px solid #ff4444;
+            color: #ff4444;
+            background: transparent;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 2px;
+            display: none; /* Hidden by default */
+        }
+        #reset-btn:hover { background: #ff4444; color: white; }
 
         /* Typography - Centerpiece */
         h1 { 
@@ -236,20 +250,25 @@
     </style>
 
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-                "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/+esm"
-            }
-        }
-    </script>
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+    "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/+esm",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "three/": "https://esm.sh/three@^0.182.0/"
+  }
+}
+</script>
 </head>
 <body>
 
     <div id="loader">
         <div class="spinner"></div>
         <div class="loader-text">Loading Holiday Magic</div>
+        <button id="reset-btn" onclick="window.clearData()">Reset Data (Fix Freeze)</button>
     </div>
 
     <div id="canvas-container"></div>
@@ -300,6 +319,20 @@
         import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'; 
         import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 
+        // Emergency Reset Function attached to Window
+        window.clearData = function() {
+            if(confirm("This will delete all saved photos to fix the freezing issue. Continue?")) {
+                localStorage.clear();
+                window.location.reload();
+            }
+        };
+
+        // Show reset button if loading takes too long
+        setTimeout(() => {
+            const btn = document.getElementById('reset-btn');
+            if(btn) btn.style.display = 'block';
+        }, 5000);
+
         // --- CONFIGURATION & STATE ---
         const CONFIG = {
             colors: {
@@ -343,14 +376,14 @@
         const statusIndicator = document.getElementById('status-indicator');
         const captionEl = document.getElementById('photo-caption');
 
-        // --- PARTICLE CLASS (FIXED) ---
+        // --- PARTICLE CLASS ---
         class Particle {
             constructor(mesh, type, isDust = false, name = "", id = null) {
                 this.mesh = mesh;
                 this.type = type;
                 this.isDust = isDust;
-                this.name = name; // Name of the person/photo
-                this.id = id; // Unique ID for photos
+                this.name = name; 
+                this.id = id; 
                 this.isDrawn = false; 
                 
                 this.posTree = new THREE.Vector3();
@@ -366,8 +399,6 @@
                 );
 
                 this.calculatePositions();
-                
-                // Set initial position
                 this.mesh.position.copy(this.posTree);
             }
 
@@ -396,41 +427,32 @@
             }
 
             update(dt, mode, focusTargetMesh) {
-                // 1. Determine Target Position (Use clone to avoid mutation!)
                 let target = new THREE.Vector3();
                 let opacity = 1.0;
                 
                 if (mode === 'SCATTER') {
                     target.copy(this.posScatter);
                 } else if (mode === 'TREE' || mode === 'END_GAME') {
-                    // Use TREE formation for END_GAME
                     target.copy(this.posTree);
                 } else if (mode === 'FOCUS') {
                     if (this.mesh === focusTargetMesh) {
-                        // Move selected photo to front-and-center
                         const desiredWorldPos = new THREE.Vector3(0, 1.5, CONFIG.camera.z - 8);
                         const invMatrix = new THREE.Matrix4().copy(mainGroup.matrixWorld).invert();
                         target.copy(desiredWorldPos.applyMatrix4(invMatrix));
                         opacity = 1.0;
                     } else {
-                        // Background particles
                         target.copy(this.posScatter);
-                        
                         if (this.type === 'PHOTO' && this.isDrawn) {
-                            // Previously drawn photos float further back
                             target.multiplyScalar(2.0); 
                             opacity = 0.05; 
                         } else if (this.type === 'PHOTO') {
-                            // Undrawn photos
                             opacity = 0.4;
                         } else {
-                            // Dust/Ornaments
-                            opacity = 0.02; // Very faint background
+                            opacity = 0.02; 
                         }
                     }
                 }
                 
-                // 2. Opacity Update
                 const updateMaterialOpacity = (obj, targetOp) => {
                     if (obj.material && obj.material.transparent) {
                         obj.material.opacity = THREE.MathUtils.lerp(obj.material.opacity, targetOp, 5 * dt);
@@ -444,11 +466,9 @@
                     updateMaterialOpacity(this.mesh, opacity);
                 }
 
-                // 3. Movement Easing
                 const lerpSpeed = (mode === 'FOCUS' && this.mesh === focusTargetMesh) ? 4.0 : 2.0; 
                 this.mesh.position.lerp(target, lerpSpeed * dt);
 
-                // 4. Rotation Logic
                 if (mode === 'SCATTER') {
                     this.mesh.rotation.x += this.spinSpeed.x * dt;
                     this.mesh.rotation.y += this.spinSpeed.y * dt;
@@ -460,14 +480,12 @@
                 }
                 
                 if (mode === 'FOCUS' && this.mesh === focusTargetMesh) {
-                    // Counter-rotate
                     const targetWorldQ = camera.quaternion.clone();
                     const parentInvQ = mainGroup.quaternion.clone().invert();
                     const targetLocalQ = parentInvQ.multiply(targetWorldQ);
                     this.mesh.quaternion.slerp(targetLocalQ, 6 * dt);
                 }
 
-                // 5. Scale Logic
                 let s = this.baseScale;
                 if (this.isDust) {
                     const pulseScale = (0.8 + 0.4 * Math.sin(clock.elapsedTime * 4 + this.mesh.id));
@@ -498,8 +516,13 @@
             createParticles(); 
             createDust();     
             
-            // Load photos from storage or default
-            await loadPhotosFromStorage();
+            // ROBUST LOAD: If this fails, it won't crash the whole app
+            try {
+                await loadPhotosFromStorage();
+            } catch (e) {
+                console.error("Critical error loading photos:", e);
+                // Continue anyway to at least show the tree
+            }
 
             setupPostProcessing();
             setupEvents();
@@ -688,22 +711,30 @@
         // --- GALLERY & STORAGE LOGIC ---
         
         async function loadPhotosFromStorage() {
-            const stored = localStorage.getItem(CONFIG.storageKey);
-            if (stored) {
-                try {
-                    const photos = JSON.parse(stored);
-                    if (photos.length > 0) {
-                        for (const p of photos) {
-                            await addPhotoToSceneFromData(p.data, p.name, p.id);
-                        }
-                        return;
-                    }
-                } catch (e) {
-                    console.error("Failed to load photos", e);
+            let photos = [];
+            try {
+                const stored = localStorage.getItem(CONFIG.storageKey);
+                if (stored) {
+                    photos = JSON.parse(stored);
                 }
+            } catch (e) {
+                console.error("Failed to parse storage", e);
+                return;
             }
-            // If no photos loaded, create default
-            createDefaultPhotos();
+
+            if (photos.length > 0) {
+                for (const p of photos) {
+                    // Try/Catch per photo so one bad photo doesn't crash everything
+                    try {
+                        await addPhotoToSceneFromData(p.data, p.name, p.id);
+                    } catch(err) {
+                        console.warn("Skipping bad photo:", p.name, err);
+                    }
+                }
+            } else {
+                // If no photos loaded, create default
+                createDefaultPhotos();
+            }
         }
 
         function savePhotoToStorage(id, name, dataUrl) {
@@ -780,22 +811,28 @@
             ctx.fillText("NOEL", 256, 300);
             
             const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            // Default photos are not saved to localStorage to allow user to delete them permanently if they want, 
-            // but for this logic, we just add it to scene without ID so it can't be deleted via UI (or add it with a special ID).
-            // Let's add it as a "virtual" photo for now.
             new THREE.TextureLoader().load(dataUrl, (t) => {
                 t.colorSpace = THREE.SRGBColorSpace;
                 addPhotoToScene(t, "Our Memory", "default");
             });
         }
         
+        // SAFE LOADER WRAPPER
         function addPhotoToSceneFromData(dataUrl, name, id) {
-            return new Promise((resolve) => {
-                new THREE.TextureLoader().load(dataUrl, (t) => {
-                    t.colorSpace = THREE.SRGBColorSpace;
-                    addPhotoToScene(t, name, id);
-                    resolve();
-                });
+            return new Promise((resolve, reject) => {
+                new THREE.TextureLoader().load(
+                    dataUrl, 
+                    (t) => {
+                        t.colorSpace = THREE.SRGBColorSpace;
+                        addPhotoToScene(t, name, id);
+                        resolve();
+                    },
+                    undefined,
+                    (err) => {
+                        // Rejecting here allows the try/catch in the loop to handle it
+                        reject(err);
+                    }
+                );
             });
         }
 
@@ -878,7 +915,13 @@
                 savePhotoToStorage(id, name, dataUrl);
                 
                 // Add to Scene
-                await addPhotoToSceneFromData(dataUrl, name, id);
+                // We use the safe wrapper but don't strictly need await here for UI responsiveness, 
+                // but nice to have order
+                try {
+                    await addPhotoToSceneFromData(dataUrl, name, id);
+                } catch(err) {
+                    console.error("Failed to add new photo to scene", err);
+                }
             }
             
             status.textContent = "Photos Added!";
