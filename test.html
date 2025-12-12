@@ -1,181 +1,204 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secret Santa 3D - Final Fix</title>
+    <title>Secret Santa - Magic Fixed</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Times New Roman', serif; }
-        
-        /* 3D Container */
+        body { margin: 0; overflow: hidden; background-color: #000000; font-family: 'Times New Roman', serif; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
-
-        /* UI Layer */
+        
+        /* UI Overlay - Minimalist */
         #ui-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             z-index: 10; pointer-events: none;
-            display: flex; flex-direction: column; align-items: center;
+            display: flex; flex-direction: column; 
+            align-items: center;
+            padding-top: 40px;
+            box-sizing: border-box;
             transition: opacity 0.5s ease;
         }
+        
+        .ui-hidden { opacity: 0; pointer-events: none !important; }
 
-        /* Loading Screen */
+        /* Loading */
         #loader {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #000; z-index: 100;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             transition: opacity 0.8s ease-out;
+            pointer-events: none;
+        }
+        .loader-text {
+            color: #d4af37; font-size: 14px; letter-spacing: 4px; margin-top: 20px;
+            text-transform: uppercase; font-weight: 100;
         }
         .spinner {
-            width: 40px; height: 40px; border: 2px solid #333; 
-            border-top: 2px solid #d4af37; border-radius: 50%; 
-            animation: spin 1s linear infinite; margin-bottom: 20px;
+            width: 40px; height: 40px; border: 1px solid rgba(212, 175, 55, 0.2); 
+            border-top: 1px solid #d4af37; border-radius: 50%; 
+            animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* Emergency Reset Button (Always visible initially) */
-        #emergency-reset {
-            position: fixed; top: 10px; left: 10px; z-index: 9999;
-            background: rgba(100, 0, 0, 0.8); color: white;
-            border: 1px solid red; padding: 8px 15px;
-            font-size: 10px; cursor: pointer; text-transform: uppercase;
-            pointer-events: auto; display: block;
-        }
-        #emergency-reset:hover { background: red; }
-
-        /* Titles */
+        /* Typography - Centerpiece */
         h1 { 
-            color: #fceea7; font-size: 5vw; margin-top: 40px; font-weight: 400; 
-            letter-spacing: 0.2em; text-shadow: 0 0 30px rgba(252, 238, 167, 0.4); 
-            font-family: serif; opacity: 0.9; text-align: center;
+            color: #fceea7; font-size: 56px; margin: 0; font-weight: 400; 
+            letter-spacing: 6px; 
+            text-shadow: 0 0 50px rgba(252, 238, 167, 0.6); 
+            background: linear-gradient(to bottom, #fff, #eebb66);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            font-family: 'Cinzel', 'Times New Roman', serif;
+            opacity: 0.9;
         }
 
-        /* Controls */
-        .controls {
-            margin-top: 20px; pointer-events: auto; text-align: center;
-            display: flex; flex-direction: column; align-items: center; gap: 10px;
+        /* Upload Button - Restored & Elegant */
+        .upload-wrapper {
+            margin-top: 20px;
+            pointer-events: auto;
+            text-align: center;
+            transition: opacity 0.5s ease;
+        }
+        .upload-btn {
+            background: rgba(20, 20, 20, 0.6); 
+            border: 1px solid rgba(212, 175, 55, 0.4); 
+            color: #d4af37; 
+            padding: 10px 25px; 
+            cursor: pointer; 
+            text-transform: uppercase; 
+            letter-spacing: 3px; 
+            font-size: 10px;
+            transition: all 0.4s;
+            display: inline-block;
+            backdrop-filter: blur(5px);
+        }
+        .upload-btn:hover { 
+            background: #d4af37; 
+            color: #000; 
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+        }
+        .hint-text {
+            color: rgba(212, 175, 55, 0.8); 
+            font-size: 10px;
+            margin-top: 8px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
         }
         
-        .btn {
-            background: rgba(20, 20, 20, 0.6); border: 1px solid #d4af37; 
-            color: #d4af37; padding: 8px 20px; cursor: pointer; 
-            text-transform: uppercase; letter-spacing: 2px; font-size: 10px;
-            transition: 0.3s;
-        }
-        .btn:hover { background: #d4af37; color: #000; }
-
-        .hints {
-            color: rgba(212, 175, 55, 0.7); font-size: 10px; letter-spacing: 1px;
-            margin-top: 10px; text-transform: uppercase; text-align: center;
-        }
-
-        /* Status & Caption */
-        #status-bar {
-            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            color: #d4af37; font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
-            text-shadow: 0 0 10px black; pointer-events: none;
-        }
-        #center-caption {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 100%; text-align: center; font-family: serif; font-size: 40px;
-            color: white; pointer-events: none; opacity: 0; transition: opacity 0.5s;
-            text-shadow: 0 0 20px gold; z-index: 5;
-        }
-
-        /* Gallery Modal */
-        #gallery-modal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95); z-index: 200;
-            display: none; flex-direction: column; align-items: center; padding: 40px;
-        }
-        #gallery-grid {
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-            gap: 15px; width: 100%; max-width: 600px; max-height: 70vh; overflow-y: auto;
-            margin: 20px 0;
-        }
-        .gallery-item { position: relative; border: 1px solid #444; }
-        .gallery-item img { width: 100%; display: block; }
-        .del-btn {
-            position: absolute; top: 0; right: 0; background: red; color: white;
-            border: none; cursor: pointer; width: 20px; height: 20px;
-        }
-
-        /* Webcam Preview (Small) */
-        #webcam {
-            position: absolute; bottom: 20px; right: 20px;
-            width: 120px; opacity: 0.3; pointer-events: none;
-            transform: scaleX(-1); border: 1px solid white;
+        /* New: Gesture/Status Indicator */
+        #status-indicator {
+            position: absolute; bottom: 20px; left: 50%; 
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background: rgba(212, 175, 55, 0.1);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            color: #d4af37;
+            font-size: 12px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-radius: 5px;
+            backdrop-filter: blur(4px);
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+            white-space: nowrap;
         }
         
-        #input-file { display: none; }
+        /* Photo Caption */
+        #photo-caption {
+            position: absolute; bottom: 18%; left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-family: 'Cinzel', serif;
+            font-size: 36px;
+            font-weight: 700;
+            text-shadow: 0 0 15px rgba(212, 175, 55, 0.8), 0 0 30px rgba(0,0,0,0.8);
+            text-align: center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.8s ease, transform 0.8s ease, top 0.8s ease;
+            z-index: 20;
+            letter-spacing: 4px;
+            width: 100%;
+        }
+        .caption-visible {
+            opacity: 1 !important;
+            transform: translateX(-50%) translateY(0px) !important;
+        }
+        .caption-hidden {
+            opacity: 0 !important;
+            transform: translateX(-50%) translateY(20px) !important;
+        }
+        /* End Game State Style */
+        .caption-end {
+            top: 50% !important;
+            bottom: auto !important;
+            transform: translate(-50%, -50%) !important;
+            font-size: 50px !important;
+            width: 90%;
+            line-height: 1.4;
+            text-shadow: 0 0 30px rgba(255, 215, 0, 0.8), 0 0 60px rgba(0,0,0,0.9) !important;
+            opacity: 1 !important;
+        }
+        
+        #file-input { display: none; }
+
+        /* Webcam feedback */
+        #webcam-wrapper {
+            position: absolute; bottom: 40px; right: 40px;
+            width: 160px; height: 120px;
+            border: 1px solid rgba(255,255,255,0.1);
+            overflow: hidden; 
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+        
+    </style>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
     </style>
 
-    <!-- IMPORT MAP: Essential for 3D and AI -->
     <script type="importmap">
-{
-  "imports": {
-    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-    "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/+esm",
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "three/": "https://esm.sh/three@^0.182.0/"
-  }
-}
-</script>
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+                "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/+esm"
+            }
+        }
+    </script>
 </head>
 <body>
 
-    <!-- Emergency Button: Works even if JS crashes -->
-    <button id="emergency-reset" onclick="hardReset()">RESET FIX</button>
-
     <div id="loader">
         <div class="spinner"></div>
-        <div style="color: #d4af37; letter-spacing: 2px;">LOADING...</div>
+        <div class="loader-text">Loading Holiday Magic</div>
     </div>
 
     <div id="canvas-container"></div>
-    <div id="center-caption"></div>
-    <div id="status-bar">Initializing 3D Engine...</div>
-    <video id="webcam" autoplay playsinline muted></video>
 
     <div id="ui-layer">
-        <h1>MERRY CHRISTMAS</h1>
-        <div class="controls">
-            <button class="btn" onclick="openGallery()">Manage Photos</button>
-            <div class="hints">
-                Fist: Tree | Open: Scatter | Pinch: Pick Gift<br>
-                Press 'H' to toggle UI
+        <h1>Merry Christmas</h1>
+        
+        <div class="upload-wrapper">
+            <label class="upload-btn">
+                Add Photos
+                <input type="file" id="file-input" multiple accept="image/*">
+            </label>
+            <div class="hint-text">
+                <p>Fist: Tree | Open Hand: Scatter | Pinch: Pick Gift</p>
+                <p>Press 'H' to hide UI</p>
             </div>
         </div>
     </div>
+    
+    <div id="photo-caption" class="caption-hidden"></div>
+    <div id="status-indicator">Initializing...</div>
 
-    <!-- Gallery UI -->
-    <div id="gallery-modal">
-        <h2 style="color:#d4af37; margin-top:0;">Memories</h2>
-        <div id="gallery-grid"></div>
-        <div style="display:flex; gap:10px;">
-            <button class="btn" onclick="document.getElementById('input-file').click()">Add Photo</button>
-            <button class="btn" onclick="closeGallery()">Close</button>
-        </div>
-        <input type="file" id="input-file" multiple accept="image/*">
+    <div id="webcam-wrapper">
+        <!-- Added muted to allow autoplay without user interaction -->
+        <video id="webcam" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
     </div>
-
-    <!-- MAIN SCRIPT -->
-    <script>
-        // Global Reset Function
-        window.hardReset = function() {
-            if(confirm("Clear all data and reload? Use this if the app is frozen.")) {
-                localStorage.clear();
-                window.location.reload();
-            }
-        };
-        // Auto-hide reset button after 8 seconds if successful
-        setTimeout(() => {
-            const btn = document.getElementById('emergency-reset');
-            if(btn) btn.style.display = 'none';
-        }, 8000);
-    </script>
 
     <script type="module">
         import * as THREE from 'three';
@@ -185,286 +208,450 @@
         import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'; 
         import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 
-        // --- GLOBAL VARIABLES ---
-        let scene, camera, renderer, composer;
-        let mainGroup, photoGroup;
-        let particles = [], photoParticles = [];
-        let clock = new THREE.Clock();
-        let handLandmarker;
+        // --- CONFIGURATION & STATE ---
         const CONFIG = {
-            storageKey: 'secret_santa_fixed_v4',
-            colors: { gold: 0xffd966, red: 0x990000, green: 0x03180a },
-            count: 1200
-        };
-        const STATE = {
-            mode: 'TREE',
-            focusTarget: null,
-            handDetected: false,
-            targetRotY: 0,
-            currentRotY: 0,
-            canPinch: true
-        };
-
-        // --- 1. INITIALIZATION SEQUENCE ---
-        async function init() {
-            try {
-                // Step 1: Init 3D Scene (Must happen first so screen isn't black)
-                initThree();
-                createParticles();
-                animate(); // Start render loop immediately
-                
-                // Hide loader quickly
-                const loader = document.getElementById('loader');
-                loader.style.opacity = '0';
-                setTimeout(() => loader.style.display = 'none', 500);
-
-                // Step 2: Load Data (Async)
-                await loadPhotosSafe();
-
-                // Step 3: Init AI (Async, might fail on local files)
-                document.getElementById('status-bar').innerText = "Loading Camera...";
-                await initMediaPipe();
-                document.getElementById('status-bar').innerText = "Ready! Show your hand.";
-
-            } catch (e) {
-                console.error(e);
-                document.getElementById('status-bar').innerText = "Error: " + e.message;
+            colors: {
+                bg: 0x000000, 
+                champagneGold: 0xffd966, 
+                deepGreen: 0x03180a,      
+                accentRed: 0x990000,      
+            },
+            particles: {
+                count: 1500,      
+                dustCount: 2500,  
+                treeHeight: 24,   
+                treeRadius: 8    
+            },
+            camera: {
+                z: 50
             }
+        };
+
+        const STATE = {
+            mode: 'TREE', // 'TREE', 'SCATTER', 'FOCUS', 'END_GAME'
+            focusTarget: null, // THREE.Group of the selected photo
+            focusName: '',
+            hand: { detected: false, x: 0, y: 0 },
+            rotation: { x: 0, y: 0 },
+            lastGesture: 'NONE', // Track last stable gesture
+            canPinch: true // Cooldown for pinch action
+        };
+
+        let scene, camera, renderer, composer;
+        let mainGroup; 
+        let clock = new THREE.Clock();
+        let particleSystem = []; 
+        let photoParticles = [];
+        let photoMeshGroup = new THREE.Group();
+        let handLandmarker, video;
+        let caneTexture; 
+
+        // DOM Elements
+        const statusIndicator = document.getElementById('status-indicator');
+        const captionEl = document.getElementById('photo-caption');
+
+        // --- PARTICLE CLASS ---
+        class Particle {
+            constructor(mesh, type, isDust = false, name = "") {
+                this.mesh = mesh;
+                this.type = type;
+                this.isDust = isDust;
+                this.name = name; 
+                this.isDrawn = false; 
+                
+                this.posTree = new THREE.Vector3();
+                this.posScatter = new THREE.Vector3();
+                this.baseScale = mesh.scale.x; 
+
+                const speedMult = (type === 'PHOTO') ? 0.3 : 2.0;
+
+                this.spinSpeed = new THREE.Vector3(
+                    (Math.random() - 0.5) * speedMult,
+                    (Math.random() - 0.5) * speedMult,
+                    (Math.random() - 0.5) * speedMult
+                );
+
+                this.calculatePositions();
+                
+                // Set initial position
+                this.mesh.position.copy(this.posTree);
+            }
+
+            calculatePositions() {
+                // TREE: Tight Spiral
+                const h = CONFIG.particles.treeHeight;
+                const halfH = h / 2;
+                let t = Math.random(); 
+                t = Math.pow(t, 0.8); 
+                const y = (t * h) - halfH;
+                let rMax = CONFIG.particles.treeRadius * (1.0 - t); 
+                if (rMax < 0.5) rMax = 0.5;
+                const angle = t * 50 * Math.PI + Math.random() * Math.PI; 
+                const r = rMax * (0.8 + Math.random() * 0.4); 
+                this.posTree.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
+
+                // SCATTER: 3D Sphere
+                let rScatter = this.isDust ? (12 + Math.random()*20) : (8 + Math.random()*12);
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                this.posScatter.set(
+                    rScatter * Math.sin(phi) * Math.cos(theta),
+                    rScatter * Math.sin(phi) * Math.sin(theta),
+                    rScatter * Math.cos(phi)
+                );
+            }
+
+            update(dt, mode, focusTargetMesh) {
+                let target = new THREE.Vector3();
+                let opacity = 1.0;
+                
+                if (mode === 'SCATTER') {
+                    target.copy(this.posScatter);
+                } else if (mode === 'TREE' || mode === 'END_GAME') {
+                    target.copy(this.posTree);
+                } else if (mode === 'FOCUS') {
+                    if (this.mesh === focusTargetMesh) {
+                        const desiredWorldPos = new THREE.Vector3(0, 1.5, CONFIG.camera.z - 8);
+                        const invMatrix = new THREE.Matrix4().copy(mainGroup.matrixWorld).invert();
+                        target.copy(desiredWorldPos.applyMatrix4(invMatrix));
+                        opacity = 1.0;
+                    } else {
+                        target.copy(this.posScatter);
+                        if (this.type === 'PHOTO' && this.isDrawn) {
+                            target.multiplyScalar(2.0); 
+                            opacity = 0.05; 
+                        } else if (this.type === 'PHOTO') {
+                            opacity = 0.4;
+                        } else {
+                            opacity = 0.02; 
+                        }
+                    }
+                }
+                
+                // Opacity Update
+                const updateMaterialOpacity = (obj, targetOp) => {
+                    if (obj.material && obj.material.transparent) {
+                        obj.material.opacity = THREE.MathUtils.lerp(obj.material.opacity, targetOp, 5 * dt);
+                    }
+                };
+                if (this.mesh.isGroup) {
+                    this.mesh.traverse((child) => {
+                        if (child.isMesh) updateMaterialOpacity(child, opacity);
+                    });
+                } else {
+                    updateMaterialOpacity(this.mesh, opacity);
+                }
+
+                // Movement Easing
+                const lerpSpeed = (mode === 'FOCUS' && this.mesh === focusTargetMesh) ? 4.0 : 2.0; 
+                this.mesh.position.lerp(target, lerpSpeed * dt);
+
+                // Rotation Logic
+                if (mode === 'SCATTER') {
+                    this.mesh.rotation.x += this.spinSpeed.x * dt;
+                    this.mesh.rotation.y += this.spinSpeed.y * dt;
+                    this.mesh.rotation.z += this.spinSpeed.z * dt;
+                } else if (mode === 'TREE' || mode === 'END_GAME') {
+                    this.mesh.rotation.x = THREE.MathUtils.lerp(this.mesh.rotation.x, 0, dt);
+                    this.mesh.rotation.z = THREE.MathUtils.lerp(this.mesh.rotation.z, 0, dt);
+                    this.mesh.rotation.y += 0.5 * dt; 
+                }
+                
+                if (mode === 'FOCUS' && this.mesh === focusTargetMesh) {
+                    const targetWorldQ = camera.quaternion.clone();
+                    const parentInvQ = mainGroup.quaternion.clone().invert();
+                    const targetLocalQ = parentInvQ.multiply(targetWorldQ);
+                    this.mesh.quaternion.slerp(targetLocalQ, 6 * dt);
+                }
+
+                // Scale Logic
+                let s = this.baseScale;
+                if (this.isDust) {
+                    const pulseScale = (0.8 + 0.4 * Math.sin(clock.elapsedTime * 4 + this.mesh.id));
+                    if (mode === 'TREE' || mode === 'END_GAME') {
+                        s = this.baseScale * pulseScale * 0.4; 
+                    } else if (mode === 'SCATTER') {
+                         s = this.baseScale * pulseScale;
+                    } else { 
+                        s = 0; 
+                    }
+                } else if (mode === 'SCATTER' && this.type === 'PHOTO') {
+                    s = this.baseScale * 2.5; 
+                } else if (mode === 'FOCUS') {
+                    if (this.mesh === focusTargetMesh) s = 5.5; 
+                    else s = 0.0; 
+                }
+                
+                this.mesh.scale.lerp(new THREE.Vector3(s,s,s), 4*dt);
+            }
+        }
+
+        // --- INIT FUNCTIONS ---
+        async function init() {
+            initThree();
+            setupEnvironment(); 
+            setupLights();
+            createTextures();
+            createParticles(); 
+            createDust();     
+            createDefaultPhotos(); 
+            setupPostProcessing();
+            setupEvents();
+            
+            // Start Animation Loop Immediately
+            animate();
+            
+            // --- CRITICAL FIX: Don't let MediaPipe failure block the UI ---
+            const loader = document.getElementById('loader');
+            
+            // Attempt to load AI, but if it fails, we just show the scene without AI
+            initMediaPipe().then(() => {
+                console.log("AI Loaded Successfully");
+                statusIndicator.textContent = "Waiting for gestures...";
+            }).catch(e => {
+                console.error("MediaPipe failed:", e);
+                statusIndicator.textContent = "Animation Mode (Camera Unavailable)";
+                statusIndicator.style.color = "#ff6666";
+            }).finally(() => {
+                // Always remove loader, even if AI fails
+                loader.style.opacity = 0;
+                setTimeout(() => {
+                    if(loader.parentNode) loader.remove();
+                }, 800);
+            });
         }
 
         function initThree() {
             const container = document.getElementById('canvas-container');
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x000000);
-            scene.fog = new THREE.FogExp2(0x000000, 0.02);
+            scene.background = new THREE.Color(CONFIG.colors.bg);
+            scene.fog = new THREE.FogExp2(CONFIG.colors.bg, 0.01); 
 
-            camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
-            camera.position.set(0, 2, 40);
+            camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 2, CONFIG.camera.z); 
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            renderer.toneMapping = THREE.ReinhardToneMapping;
+            renderer.toneMapping = THREE.ReinhardToneMapping; 
+            renderer.toneMappingExposure = 2.2; 
             container.appendChild(renderer.domElement);
 
-            // Lighting
-            const pmrem = new THREE.PMREMGenerator(renderer);
-            scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-            const spot = new THREE.SpotLight(0xffcc66, 500);
-            spot.position.set(20, 40, 20);
-            scene.add(spot);
-            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-
-            // Groups
             mainGroup = new THREE.Group();
             scene.add(mainGroup);
-            photoGroup = new THREE.Group();
-            mainGroup.add(photoGroup);
+        }
 
-            // Post Processing
-            const renderPass = new RenderPass(scene, camera);
+        function setupEnvironment() {
+            const pmremGenerator = new THREE.PMREMGenerator(renderer);
+            scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+        }
+
+        function setupLights() {
+            const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambient);
+
+            const innerLight = new THREE.PointLight(0xffaa00, 2, 20);
+            innerLight.position.set(0, 5, 0);
+            mainGroup.add(innerLight);
+
+            const spotGold = new THREE.SpotLight(0xffcc66, 1200);
+            spotGold.position.set(30, 40, 40);
+            spotGold.angle = 0.5;
+            spotGold.penumbra = 0.5;
+            scene.add(spotGold);
+
+            const spotBlue = new THREE.SpotLight(0x6688ff, 600);
+            spotBlue.position.set(-30, 20, -30);
+            scene.add(spotBlue);
+            
+            const fill = new THREE.DirectionalLight(0xffeebb, 0.8);
+            fill.position.set(0, 0, 50);
+            scene.add(fill);
+        }
+
+        function setupPostProcessing() {
+            const renderScene = new RenderPass(scene, camera);
             const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-            bloomPass.threshold = 0.6; bloomPass.strength = 0.5; bloomPass.radius = 0.5;
+            bloomPass.threshold = 0.7; 
+            bloomPass.strength = 0.45; 
+            bloomPass.radius = 0.4;
+
             composer = new EffectComposer(renderer);
-            composer.addPass(renderPass);
+            composer.addPass(renderScene);
             composer.addPass(bloomPass);
-
-            // Events
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth/window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-                composer.setSize(window.innerWidth, window.innerHeight);
-            });
-            
-            window.addEventListener('keydown', (e) => {
-                if(e.key.toLowerCase() === 'h') {
-                    const ui = document.getElementById('ui-layer');
-                    ui.style.opacity = ui.style.opacity === '0' ? '1' : '0';
-                }
-            });
         }
 
-        // --- 2. OBJECT CREATION ---
+        function createTextures() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0,0,128,128);
+            ctx.fillStyle = '#880000'; 
+            ctx.beginPath();
+            for(let i=-128; i<256; i+=32) {
+                ctx.moveTo(i, 0); ctx.lineTo(i+32, 128); ctx.lineTo(i+16, 128); ctx.lineTo(i-16, 0);
+            }
+            ctx.fill();
+            caneTexture = new THREE.CanvasTexture(canvas);
+            caneTexture.wrapS = THREE.RepeatWrapping;
+            caneTexture.wrapT = THREE.RepeatWrapping;
+            caneTexture.repeat.set(3, 3);
+        }
+
         function createParticles() {
-            const geo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
-            const matGold = new THREE.MeshStandardMaterial({ color: CONFIG.colors.gold, metalness: 1, roughness: 0.2 });
-            const matGreen = new THREE.MeshStandardMaterial({ color: CONFIG.colors.green, metalness: 0.1, roughness: 0.8 });
-            const matRed = new THREE.MeshStandardMaterial({ color: CONFIG.colors.red, metalness: 0.5, roughness: 0.2 });
+            const sphereGeo = new THREE.SphereGeometry(0.5, 32, 32); 
+            const boxGeo = new THREE.BoxGeometry(0.55, 0.55, 0.55); 
+            const curve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(0, -0.5, 0), new THREE.Vector3(0, 0.3, 0),
+                new THREE.Vector3(0.1, 0.5, 0), new THREE.Vector3(0.3, 0.4, 0)
+            ]);
+            const candyGeo = new THREE.TubeGeometry(curve, 16, 0.08, 8, false);
 
-            for(let i=0; i<CONFIG.count; i++) {
-                let mesh;
-                const r = Math.random();
-                if(r < 0.6) mesh = new THREE.Mesh(geo, matGreen);
-                else if(r < 0.85) mesh = new THREE.Mesh(geo, matGold);
-                else mesh = new THREE.Mesh(geo, matRed);
+            const goldMat = new THREE.MeshStandardMaterial({
+                color: CONFIG.colors.champagneGold,
+                metalness: 1.0, roughness: 0.1,
+                envMapIntensity: 2.0, 
+                emissive: 0x443300,    
+                emissiveIntensity: 0.3
+            });
 
-                mesh.scale.setScalar(0.5 + Math.random()*0.5);
+            const greenMat = new THREE.MeshStandardMaterial({
+                color: CONFIG.colors.deepGreen,
+                metalness: 0.2, roughness: 0.8,
+                emissive: 0x002200,
+                emissiveIntensity: 0.2 
+            });
+
+            const redMat = new THREE.MeshPhysicalMaterial({
+                color: CONFIG.colors.accentRed,
+                metalness: 0.3, roughness: 0.2, clearcoat: 1.0,
+                emissive: 0x330000
+            });
+            
+            const candyMat = new THREE.MeshStandardMaterial({ map: caneTexture, roughness: 0.4 });
+
+            for (let i = 0; i < CONFIG.particles.count; i++) {
+                const rand = Math.random();
+                let mesh, type;
+                
+                if (rand < 0.40) {
+                    mesh = new THREE.Mesh(boxGeo, greenMat);
+                    type = 'BOX';
+                } else if (rand < 0.70) {
+                    mesh = new THREE.Mesh(boxGeo, goldMat);
+                    type = 'GOLD_BOX';
+                } else if (rand < 0.92) {
+                    mesh = new THREE.Mesh(sphereGeo, goldMat);
+                    type = 'GOLD_SPHERE';
+                } else if (rand < 0.97) {
+                    mesh = new THREE.Mesh(sphereGeo, redMat);
+                    type = 'RED';
+                } else {
+                    mesh = new THREE.Mesh(candyGeo, candyMat);
+                    type = 'CANE';
+                }
+
+                const s = 0.4 + Math.random() * 0.5;
+                mesh.scale.set(s,s,s);
+                mesh.rotation.set(Math.random()*6, Math.random()*6, Math.random()*6);
+                
                 mainGroup.add(mesh);
-                
-                // Calculate Positions
-                const p = new Particle(mesh);
-                particles.push(p);
+                particleSystem.push(new Particle(mesh, type, false));
             }
 
-            // Star
-            const star = new THREE.Mesh(new THREE.OctahedronGeometry(1.5,0), new THREE.MeshBasicMaterial({color: 0xffddaa}));
-            star.position.y = 13;
+            const starGeo = new THREE.OctahedronGeometry(1.2, 0);
+            const starMat = new THREE.MeshStandardMaterial({
+                color: 0xffdd88, emissive: 0xffaa00, emissiveIntensity: 1.0,
+                metalness: 1.0, roughness: 0
+            });
+            const star = new THREE.Mesh(starGeo, starMat);
+            star.position.set(0, CONFIG.particles.treeHeight/2 + 1.2, 0);
             mainGroup.add(star);
-        }
-
-        class Particle {
-            constructor(mesh, type='DECOR') {
-                this.mesh = mesh;
-                this.type = type;
-                this.isDrawn = false;
-
-                // Tree Position (Spiral)
-                const h = 24;
-                const t = Math.pow(Math.random(), 0.8);
-                const y = (t * h) - (h/2);
-                const r = (8 * (1-t)) * (0.8 + Math.random()*0.4);
-                const a = t * 40 + Math.random() * 6;
-                this.posTree = new THREE.Vector3(Math.cos(a)*r, y, Math.sin(a)*r);
-
-                // Scatter Position
-                const sr = 10 + Math.random() * 10;
-                this.posScatter = new THREE.Vector3((Math.random()-0.5)*sr, (Math.random()-0.5)*sr, (Math.random()-0.5)*sr);
-
-                this.mesh.position.copy(this.posTree);
-            }
-
-            update(dt) {
-                const target = new THREE.Vector3();
-                let s = this.mesh.geometry.type === 'PlaneGeometry' ? 1 : this.mesh.scale.x; 
-                let opacity = 1.0;
-
-                // Logic based on global MODE
-                if (STATE.mode === 'TREE') target.copy(this.posTree);
-                else if (STATE.mode === 'SCATTER') target.copy(this.posScatter);
-                else if (STATE.mode === 'FOCUS') {
-                    if (this.mesh === STATE.focusTarget) {
-                        // Focus item moves to front
-                        const inv = mainGroup.matrixWorld.clone().invert();
-                        const worldTarget = new THREE.Vector3(0, 0, 32); // Close to camera
-                        target.copy(worldTarget.applyMatrix4(inv));
-                        s = 3.0; // Enlarge
-                        this.mesh.lookAt(camera.position); // Face user
-                    } else {
-                        target.copy(this.posScatter); // Background scatters
-                        opacity = 0.1; // Fade out
-                    }
-                }
-
-                // Smooth Move
-                this.mesh.position.lerp(target, dt * 2.5);
-                
-                // Smooth Rotate (idle)
-                if (STATE.mode !== 'FOCUS' || this.mesh !== STATE.focusTarget) {
-                    this.mesh.rotation.y += dt * 0.5;
-                }
-                
-                // Opacity handling for Photos
-                if (this.mesh.material.transparent) {
-                    this.mesh.material.opacity += (opacity - this.mesh.material.opacity) * dt * 5;
-                }
-            }
-        }
-
-        // --- 3. PHOTO MANAGEMENT (SAFE) ---
-        async function loadPhotosSafe() {
-            let data = [];
-            try {
-                const json = localStorage.getItem(CONFIG.storageKey);
-                if (json) data = JSON.parse(json);
-            } catch (e) {
-                console.warn("Corrupt storage, clearing.");
-                localStorage.removeItem(CONFIG.storageKey);
-            }
-
-            if (data.length === 0) {
-                createDefaultPhoto();
-            } else {
-                for (const item of data) {
-                    // Load one by one, catch errors individually
-                    try {
-                        await addPhotoToScene(item.data, item.name, item.id);
-                    } catch (err) {
-                        console.warn("Skipping bad photo", err);
-                    }
-                }
-            }
-            updateGallery();
-        }
-
-        function createDefaultPhoto() {
-            const cvs = document.createElement('canvas'); cvs.width=512; cvs.height=512;
-            const ctx = cvs.getContext('2d');
-            ctx.fillStyle='#111'; ctx.fillRect(0,0,512,512);
-            ctx.strokeStyle='#da0'; ctx.lineWidth=20; ctx.strokeRect(20,20,472,472);
-            ctx.fillStyle='#da0'; ctx.font='60px serif'; ctx.textAlign='center';
-            ctx.fillText("HAPPY", 256, 220); ctx.fillText("HOLIDAYS", 256, 300);
             
-            new THREE.TextureLoader().load(cvs.toDataURL(), t => {
-                t.colorSpace = THREE.SRGBColorSpace;
-                addPhotoToSceneImpl(t, "Welcome", "default");
-            });
+            mainGroup.add(photoMeshGroup);
         }
 
-        function addPhotoToScene(dataUrl, name, id) {
-            return new Promise((resolve) => {
-                new THREE.TextureLoader().load(
-                    dataUrl,
-                    (t) => {
-                        t.colorSpace = THREE.SRGBColorSpace;
-                        addPhotoToSceneImpl(t, name, id);
-                        resolve();
-                    },
-                    undefined,
-                    () => resolve() // Resolve on error so we don't block
-                );
-            });
+        function createDust() {
+            const geo = new THREE.TetrahedronGeometry(0.08, 0);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xffeebb, transparent: true, opacity: 0.8 }); 
+            
+            for(let i=0; i<CONFIG.particles.dustCount; i++) {
+                 const mesh = new THREE.Mesh(geo, mat);
+                 mesh.scale.setScalar(0.5 + Math.random());
+                 mainGroup.add(mesh);
+                 particleSystem.push(new Particle(mesh, 'DUST', true));
+            }
         }
 
-        function addPhotoToSceneImpl(tex, name, id) {
+        function createDefaultPhotos() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#050505'; ctx.fillRect(0,0,512,512);
+            ctx.strokeStyle = '#eebb66'; ctx.lineWidth = 15; ctx.strokeRect(20,20,472,472);
+            ctx.font = '500 60px Times New Roman'; ctx.fillStyle = '#eebb66';
+            ctx.textAlign = 'center'; 
+            ctx.fillText("JOYEUX", 256, 230);
+            ctx.fillText("NOEL", 256, 300);
+            
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            addPhotoToScene(tex, "Our Memory");
+        }
+
+        function addPhotoToScene(texture, name = "Untitled") {
+            const frameGeo = new THREE.BoxGeometry(1.4, 1.4, 0.05);
+            const frameMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.champagneGold, metalness: 1.0, roughness: 0.1, transparent: true });
+            const frame = new THREE.Mesh(frameGeo, frameMat);
+
+            const photoGeo = new THREE.PlaneGeometry(1.2, 1.2);
+            const photoMat = new THREE.MeshBasicMaterial({ map: texture, transparent: true }); 
+            const photo = new THREE.Mesh(photoGeo, photoMat);
+            photo.position.z = 0.04;
+
             const group = new THREE.Group();
-            
-            // Frame
-            const frame = new THREE.Mesh(
-                new THREE.BoxGeometry(1.2, 1.2, 0.05),
-                new THREE.MeshStandardMaterial({color: CONFIG.colors.gold})
-            );
-            // Image
-            const img = new THREE.Mesh(
-                new THREE.PlaneGeometry(1, 1),
-                new THREE.MeshBasicMaterial({map: tex, transparent: true})
-            );
-            img.position.z = 0.03;
-            
             group.add(frame);
-            group.add(img);
-            photoGroup.add(group);
-
-            const p = new Particle(group, 'PHOTO');
-            p.id = id;
-            p.name = name;
-            particles.push(p);
+            group.add(photo);
+            
+            const s = 0.8;
+            group.scale.set(s,s,s);
+            
+            photoMeshGroup.add(group);
+            
+            // Pass name to Particle
+            const p = new Particle(group, 'PHOTO', false, name);
+            particleSystem.push(p);
             photoParticles.push(p);
         }
+        
+        function handleImageUpload(e) {
+            const files = e.target.files;
+            if(!files.length) return;
+            Array.from(files).forEach(f => {
+                // Extract name without extension
+                const name = f.name.replace(/\.[^/.]+$/, "");
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    new THREE.TextureLoader().load(ev.target.result, (t) => {
+                        t.colorSpace = THREE.SRGBColorSpace;
+                        addPhotoToScene(t, name);
+                    });
+                }
+                reader.readAsDataURL(f);
+            });
+        }
 
-        // --- 4. AI & GESTURES ---
+        // --- MEDIAPIPE (FIXED) ---
         async function initMediaPipe() {
-            const video = document.getElementById('webcam');
+            video = document.getElementById('webcam');
             
-            // Safety check for file protocol
-            if (window.location.protocol === 'file:') {
-                throw new Error("Cameras don't work in file:// mode. Please use a local server.");
-            }
-
+            // 1. More robust FilesetResolver
             const vision = await FilesetResolver.forVisionTasks(
                 "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
             );
-            
+
+            // 2. Initialize Landmarker
             handLandmarker = await HandLandmarker.createFromOptions(vision, {
                 baseOptions: {
                     modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
@@ -473,187 +660,222 @@
                 runningMode: "VIDEO",
                 numHands: 1
             });
-
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            video.srcObject = stream;
             
-            // Start prediction loop
-            video.addEventListener("loadeddata", () => {
-                predict();
-            });
+            // 3. Robust Camera Access
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                
+                return new Promise((resolve) => {
+                    video.addEventListener("loadeddata", () => {
+                        document.getElementById('webcam-wrapper').style.opacity = 0.4;
+                        predictWebcam();
+                        resolve();
+                    });
+                });
+            } else {
+                 throw new Error("Webcam not supported or blocked by browser/protocol.");
+            }
         }
 
-        let lastTime = -1;
-        function predict() {
-            const video = document.getElementById('webcam');
-            if (handLandmarker && video.currentTime !== lastTime) {
-                lastTime = video.currentTime;
-                const result = handLandmarker.detectForVideo(video, performance.now());
-                
-                if (result.landmarks.length > 0) {
-                    STATE.handDetected = true;
-                    handleGesture(result.landmarks[0]);
-                } else {
-                    STATE.handDetected = false;
+        let lastVideoTime = -1;
+        async function predictWebcam() {
+            if (video && video.currentTime !== lastVideoTime) {
+                lastVideoTime = video.currentTime;
+                if (handLandmarker) {
+                    const now = performance.now();
+                    const result = handLandmarker.detectForVideo(video, now);
+                    processGestures(result);
                 }
             }
-            requestAnimationFrame(predict);
+            requestAnimationFrame(predictWebcam);
         }
+        
+        function processGestures(result) {
+            if (result.landmarks && result.landmarks.length > 0) {
+                STATE.hand.detected = true;
+                const lm = result.landmarks[0]; 
 
-        function handleGesture(lm) {
-            // Calculate Gesture
-            const dist = (i, j) => Math.hypot(lm[i].x - lm[j].x, lm[i].y - lm[j].y);
-            const pinch = dist(4, 8) < 0.05;
-            const open = dist(8,0) > 0.4 && dist(12,0) > 0.4; // Rough check
-            const fist = dist(8,0) < 0.2 && dist(12,0) < 0.2;
+                // Mapping coordinates
+                STATE.hand.x = (lm[9].x - 0.5) * 2; 
+                STATE.hand.y = (lm[9].y - 0.5) * 2;
+                
+                // --- Gesture Detection Logic ---
+                const wrist = lm[0];
+                const thumb = lm[4]; 
+                const index = lm[8]; 
+                const middle = lm[12];
+                const ring = lm[16];
+                const pinky = lm[20];
+                
+                // 1. Pinch (Draw/Focus)
+                const pinchDist = Math.hypot(thumb.x - index.x, thumb.y - index.y, thumb.z - index.z);
+                const isPinching = pinchDist < 0.04; 
+                
+                // 2. Open vs. Closed
+                const tipDists = [
+                    Math.hypot(index.x - wrist.x, index.y - wrist.y),
+                    Math.hypot(middle.x - wrist.x, middle.y - wrist.y),
+                    Math.hypot(ring.x - wrist.x, ring.y - wrist.y),
+                    Math.hypot(pinky.x - wrist.x, pinky.y - wrist.y)
+                ];
+                const avgTipDist = tipDists.reduce((a, b) => a + b, 0) / tipDists.length;
 
-            // Map hand X position to Rotation
-            const handX = (lm[9].x - 0.5) * -2; // Invert for mirror effect
-            if (STATE.mode === 'SCATTER') {
-                STATE.targetRotY = handX * 1.5;
+                const OPEN_THRESHOLD = 0.45; 
+                const CLOSED_THRESHOLD = 0.20; 
+
+                let currentGesture = 'NONE';
+                if (isPinching) currentGesture = 'PINCH';
+                else if (avgTipDist > OPEN_THRESHOLD) currentGesture = 'OPEN_PALM';
+                else if (avgTipDist < CLOSED_THRESHOLD) currentGesture = 'CLOSED_FIST';
+
+                // --- STATE MACHINE ---
+
+                if (STATE.mode === 'END_GAME') {
+                    // Lock to END_GAME state
+                } 
+                else if (STATE.mode === 'FOCUS') {
+                    // STICKY FOCUS: Only return to tree if explicit FIST
+                    if (currentGesture === 'CLOSED_FIST') {
+                        STATE.mode = 'TREE';
+                        STATE.focusTarget = null;
+                        updateStatusIndicator('TREE');
+                    }
+                } 
+                else {
+                    // Normal Navigation (TREE <-> SCATTER -> FOCUS)
+                    if (currentGesture === 'PINCH' && STATE.canPinch) {
+                        handlePinchDraw();
+                        // handlePinchDraw will set mode to FOCUS or END_GAME
+                        STATE.canPinch = false; 
+                        setTimeout(() => STATE.canPinch = true, 3000); 
+                    } else if (currentGesture === 'OPEN_PALM') {
+                        STATE.mode = 'SCATTER';
+                    } else if (currentGesture === 'CLOSED_FIST') {
+                        STATE.mode = 'TREE';
+                    }
+                }
+                
+                if (currentGesture !== STATE.lastGesture && STATE.mode !== 'END_GAME') {
+                    STATE.lastGesture = currentGesture;
+                    // Only update text if not in focus/end game logic handled elsewhere
+                    if(STATE.mode !== 'FOCUS') updateStatusIndicator(STATE.mode, currentGesture);
+                }
+
             } else {
-                STATE.targetRotY += 0.005; // Auto rotate
+                STATE.hand.detected = false;
+                STATE.lastGesture = 'NONE';
+                // Don't clear status in End Game
+                if (STATE.mode !== 'END_GAME' && STATE.mode !== 'FOCUS') {
+                    updateStatusIndicator('NONE');
+                }
             }
-
-            // State Logic
-            if (STATE.mode === 'FOCUS') {
-                if (fist) resetToTree();
+        }
+        
+        function handlePinchDraw() {
+            const undrawnPhotos = photoParticles.filter(p => !p.isDrawn);
+            
+            if (undrawnPhotos.length === 0) {
+                STATE.mode = 'END_GAME';
+                STATE.focusTarget = null;
+                updateStatusIndicator('END_GAME');
                 return;
             }
 
-            if (open) setMode('SCATTER', "Scatter Mode (Wave Hand)");
-            else if (fist) setMode('TREE', "Tree Mode");
+            const randomIndex = Math.floor(Math.random() * undrawnPhotos.length);
+            const drawnParticle = undrawnPhotos[randomIndex];
             
-            if (pinch && STATE.canPinch) {
-                pickRandomGift();
+            drawnParticle.isDrawn = true;
+            STATE.mode = 'FOCUS'; // Explicitly set mode
+            STATE.focusTarget = drawnParticle.mesh;
+            STATE.focusName = drawnParticle.name;
+            updateStatusIndicator('FOCUS');
+        }
+
+        function updateStatusIndicator(mode, gesture) {
+            let text = 'Waiting...';
+            statusIndicator.style.opacity = 1.0;
+            
+            // Handle Caption Display
+            captionEl.classList.remove('caption-visible', 'caption-hidden', 'caption-end');
+            
+            if (mode === 'END_GAME') {
+                captionEl.textContent = '🎉 The end, Happy Christmas!';
+                captionEl.classList.add('caption-end');
+            } else if (mode === 'FOCUS' && STATE.focusTarget) {
+                captionEl.textContent = STATE.focusName;
+                captionEl.classList.add('caption-visible');
+            } else {
+                captionEl.classList.add('caption-hidden');
             }
-        }
 
-        function setMode(m, text) {
-            STATE.mode = m;
-            document.getElementById('status-bar').innerText = text;
-        }
-
-        function pickRandomGift() {
-            // Find undrawn photos
-            const available = photoParticles.filter(p => !p.isDrawn);
-            if (available.length === 0) return;
-
-            const p = available[Math.floor(Math.random() * available.length)];
-            p.isDrawn = true;
-            STATE.mode = 'FOCUS';
-            STATE.focusTarget = p.mesh;
+            if (mode === 'TREE') {
+                text = '🟢 Happy Christmas! 🔴';
+            } else if (mode === 'SCATTER') {
+                text = '🟡 Waiting for surprise 🟡';
+            } else if (mode === 'FOCUS') {
+                 text = '🎁 Gift Selected (Make Fist to Close)';
+            } else if (mode === 'END_GAME') {
+                text = '🎄 Merry Christmas! 🎄';
+            } else {
+                statusIndicator.style.opacity = 0.5;
+            }
             
-            // Show Caption
-            const cap = document.getElementById('center-caption');
-            cap.innerText = p.name || "A Memory";
-            cap.style.opacity = 1;
-            document.getElementById('status-bar').innerText = "Make FIST to close";
-
-            // Debounce
-            STATE.canPinch = false;
-            setTimeout(() => STATE.canPinch = true, 2000);
+            statusIndicator.textContent = text;
         }
 
-        function resetToTree() {
-            STATE.mode = 'TREE';
-            STATE.focusTarget = null;
-            document.getElementById('center-caption').style.opacity = 0;
-            document.getElementById('status-bar').innerText = "Tree Mode";
+        function setupEvents() {
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                composer.setSize(window.innerWidth, window.innerHeight);
+            });
+            document.getElementById('file-input').addEventListener('change', handleImageUpload);
+            
+            window.addEventListener('keydown', (e) => {
+                if (e.key.toLowerCase() === 'h') {
+                    const uiLayer = document.getElementById('ui-layer');
+                    const indicator = document.getElementById('status-indicator');
+                    if (uiLayer) uiLayer.classList.toggle('ui-hidden'); 
+                    if (indicator) indicator.classList.toggle('ui-hidden');
+                }
+            });
         }
 
-        // --- 5. RENDER LOOP ---
         function animate() {
             requestAnimationFrame(animate);
             const dt = clock.getDelta();
 
-            // Smooth Rotation
-            if (STATE.mode !== 'SCATTER') STATE.targetRotY += dt * 0.2;
-            STATE.currentRotY += (STATE.targetRotY - STATE.currentRotY) * dt * 2;
+            let targetRotY = 0;
+            let targetRotX = 0;
+
+            if (STATE.mode === 'SCATTER' && STATE.hand.detected) {
+                targetRotY = STATE.hand.x * Math.PI * 0.9; 
+                targetRotX = STATE.hand.y * Math.PI * 0.25;
+            } else if (STATE.mode === 'TREE' || STATE.mode === 'END_GAME') {
+                targetRotY = STATE.rotation.y + 0.3 * dt;
+                targetRotX = 0;
+            } else if (STATE.mode === 'FOCUS') {
+                targetRotY = STATE.rotation.y + 0.1 * dt; 
+                targetRotX = 0;
+            }
+
+            STATE.rotation.y = THREE.MathUtils.lerp(STATE.rotation.y, targetRotY, 3.0 * dt);
+            STATE.rotation.x = THREE.MathUtils.lerp(STATE.rotation.x, targetRotX, 3.0 * dt);
+
+            mainGroup.rotation.y = STATE.rotation.y;
+            mainGroup.rotation.x = STATE.rotation.x;
             
-            mainGroup.rotation.y = STATE.currentRotY;
+            // Force update matrix so that world position calculations in Particle.update are accurate for this frame
             mainGroup.updateMatrixWorld();
 
-            // Update Particles
-            particles.forEach(p => p.update(dt));
-
+            particleSystem.forEach(p => p.update(dt, STATE.mode, STATE.focusTarget));
+            
             composer.render();
         }
 
-        // --- 6. UI HANDLERS ---
-        window.openGallery = function() {
-            document.getElementById('gallery-modal').style.display = 'flex';
-        };
-        window.closeGallery = function() {
-            document.getElementById('gallery-modal').style.display = 'none';
-        };
-        
-        function updateGallery() {
-            const grid = document.getElementById('gallery-grid');
-            grid.innerHTML = '';
-            const data = JSON.parse(localStorage.getItem(CONFIG.storageKey) || '[]');
-            
-            data.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'gallery-item';
-                div.innerHTML = `<img src="${item.data}"><button class="del-btn" onclick="deletePhoto('${item.id}')">×</button>`;
-                grid.appendChild(div);
-            });
-        }
-        
-        window.deletePhoto = function(id) {
-            if(!confirm("Delete?")) return;
-            let data = JSON.parse(localStorage.getItem(CONFIG.storageKey) || '[]');
-            data = data.filter(i => i.id !== id);
-            localStorage.setItem(CONFIG.storageKey, JSON.stringify(data));
-            
-            // Remove from 3D scene immediately
-            const idx = photoParticles.findIndex(p => p.id === id);
-            if(idx > -1) {
-                photoGroup.remove(photoParticles[idx].mesh);
-                particles = particles.filter(p => p !== photoParticles[idx]);
-                photoParticles.splice(idx, 1);
-            }
-            updateGallery();
-        };
-
-        // File Upload
-        document.getElementById('input-file').addEventListener('change', async (e) => {
-            const files = e.target.files;
-            if(!files.length) return;
-
-            let data = JSON.parse(localStorage.getItem(CONFIG.storageKey) || '[]');
-
-            for(let f of files) {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const cvs = document.createElement('canvas');
-                        const s = Math.min(600/img.width, 600/img.height, 1);
-                        cvs.width = img.width * s; cvs.height = img.height * s;
-                        cvs.getContext('2d').drawImage(img,0,0,cvs.width,cvs.height);
-                        
-                        const item = {
-                            id: Date.now() + Math.random(),
-                            name: f.name.split('.')[0],
-                            data: cvs.toDataURL('image/jpeg', 0.7)
-                        };
-                        data.push(item);
-                        localStorage.setItem(CONFIG.storageKey, JSON.stringify(data));
-                        
-                        addPhotoToScene(item.data, item.name, item.id);
-                        updateGallery();
-                    };
-                    img.src = ev.target.result;
-                }
-                reader.readAsDataURL(f);
-            }
-        });
-
-        // Run Init
         init();
-
     </script>
 </body>
 </html>
