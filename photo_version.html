@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secret Santa - Magic Fixed</title>
+    <title>Secret Santa - Fixed</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000000; font-family: 'Times New Roman', serif; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
@@ -27,7 +27,6 @@
             background: #000; z-index: 100;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             transition: opacity 0.8s ease-out;
-            pointer-events: auto; /* Catch clicks if stuck */
         }
         .loader-text {
             color: #d4af37; font-size: 14px; letter-spacing: 4px; margin-top: 20px;
@@ -51,14 +50,24 @@
             opacity: 0.9;
         }
 
-        /* Upload Button - Restored & Elegant */
+        /* Buttons & Inputs */
         .upload-wrapper {
             margin-top: 20px;
             pointer-events: auto;
             text-align: center;
             transition: opacity 0.5s ease;
+            display: flex;
+            gap: 15px;
+            flex-direction: column;
+            align-items: center;
         }
-        .upload-btn {
+        
+        .btn-group {
+            display: flex;
+            gap: 15px;
+        }
+
+        .action-btn {
             background: rgba(20, 20, 20, 0.6); 
             border: 1px solid rgba(212, 175, 55, 0.4); 
             color: #d4af37; 
@@ -70,12 +79,14 @@
             transition: all 0.4s;
             display: inline-block;
             backdrop-filter: blur(5px);
+            text-decoration: none;
         }
-        .upload-btn:hover { 
+        .action-btn:hover { 
             background: #d4af37; 
             color: #000; 
             box-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
         }
+
         .hint-text {
             color: rgba(212, 175, 55, 0.8); 
             font-size: 10px;
@@ -84,7 +95,73 @@
             text-transform: uppercase;
         }
         
-        /* New: Gesture/Status Indicator */
+        /* Modal Gallery */
+        #gallery-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 200;
+            display: flex; flex-direction: column; align-items: center;
+            padding: 40px; box-sizing: border-box;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #gallery-modal.active { opacity: 1; pointer-events: auto; }
+        
+        .modal-header {
+            font-family: 'Cinzel', serif;
+            color: #d4af37;
+            font-size: 32px;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #333;
+            width: 100%;
+            text-align: center;
+            padding-bottom: 20px;
+        }
+        
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 20px;
+            width: 100%;
+            max-width: 800px;
+            overflow-y: auto;
+            margin-bottom: 30px;
+        }
+        
+        .gallery-item {
+            position: relative;
+            aspect-ratio: 1;
+            border: 1px solid #444;
+            border-radius: 4px;
+            overflow: hidden;
+            background: #111;
+        }
+        
+        .gallery-item img {
+            width: 100%; height: 100%; object-fit: cover;
+        }
+        
+        .delete-btn {
+            position: absolute; top: 5px; right: 5px;
+            background: rgba(200, 0, 0, 0.8);
+            color: white; border: none;
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .delete-btn:hover { background: red; }
+        
+        .gallery-name {
+            position: absolute; bottom: 0; left: 0; width: 100%;
+            background: rgba(0,0,0,0.7);
+            color: #ccc; font-size: 10px;
+            padding: 4px; box-sizing: border-box;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+
+        /* Status Indicator */
         #status-indicator {
             position: absolute; bottom: 20px; left: 50%; 
             transform: translateX(-50%);
@@ -99,7 +176,6 @@
             backdrop-filter: blur(4px);
             transition: opacity 0.5s ease;
             pointer-events: none;
-            white-space: nowrap;
         }
         
         /* Photo Caption */
@@ -140,6 +216,7 @@
         }
         
         #file-input { display: none; }
+        #gallery-input { display: none; }
 
         /* Webcam feedback */
         #webcam-wrapper {
@@ -147,7 +224,7 @@
             width: 160px; height: 120px;
             border: 1px solid rgba(255,255,255,0.1);
             overflow: hidden; 
-            opacity: 0;
+            opacity: 0.4;
             pointer-events: none;
             transition: opacity 0.5s ease;
         }
@@ -181,23 +258,38 @@
         <h1>Merry Christmas</h1>
         
         <div class="upload-wrapper">
-            <label class="upload-btn">
-                Add Photos
-                <input type="file" id="file-input" multiple accept="image/*">
-            </label>
+            <div class="btn-group">
+                <button class="action-btn" id="open-gallery-btn">Manage Photos</button>
+            </div>
+            
             <div class="hint-text">
                 <p>Fist: Tree | Open Hand: Scatter | Pinch: Pick Gift</p>
                 <p>Press 'H' to hide UI</p>
             </div>
         </div>
     </div>
+
+    <!-- Gallery Modal -->
+    <div id="gallery-modal">
+        <div class="modal-header">Memory Gallery</div>
+        <div class="gallery-grid" id="gallery-grid">
+            <!-- Items injected here -->
+        </div>
+        <div class="btn-group">
+            <label class="action-btn">
+                Add New Photo
+                <input type="file" id="gallery-input" multiple accept="image/*">
+            </label>
+            <button class="action-btn" id="close-gallery-btn">Close & Play</button>
+        </div>
+        <p style="color: #666; font-size: 10px; margin-top: 15px;">Photos are saved to this browser.</p>
+    </div>
     
     <div id="photo-caption" class="caption-hidden"></div>
-    <div id="status-indicator">Initializing...</div>
+    <div id="status-indicator">Waiting for camera...</div>
 
     <div id="webcam-wrapper">
-        <!-- Added muted to allow autoplay without user interaction -->
-        <video id="webcam" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+        <video id="webcam" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
     </div>
 
     <script type="module">
@@ -224,7 +316,8 @@
             },
             camera: {
                 z: 50
-            }
+            },
+            storageKey: 'secret_santa_photos_v1'
         };
 
         const STATE = {
@@ -250,13 +343,14 @@
         const statusIndicator = document.getElementById('status-indicator');
         const captionEl = document.getElementById('photo-caption');
 
-        // --- PARTICLE CLASS ---
+        // --- PARTICLE CLASS (FIXED) ---
         class Particle {
-            constructor(mesh, type, isDust = false, name = "") {
+            constructor(mesh, type, isDust = false, name = "", id = null) {
                 this.mesh = mesh;
                 this.type = type;
                 this.isDust = isDust;
-                this.name = name; 
+                this.name = name; // Name of the person/photo
+                this.id = id; // Unique ID for photos
                 this.isDrawn = false; 
                 
                 this.posTree = new THREE.Vector3();
@@ -302,33 +396,41 @@
             }
 
             update(dt, mode, focusTargetMesh) {
+                // 1. Determine Target Position (Use clone to avoid mutation!)
                 let target = new THREE.Vector3();
                 let opacity = 1.0;
                 
                 if (mode === 'SCATTER') {
                     target.copy(this.posScatter);
                 } else if (mode === 'TREE' || mode === 'END_GAME') {
+                    // Use TREE formation for END_GAME
                     target.copy(this.posTree);
                 } else if (mode === 'FOCUS') {
                     if (this.mesh === focusTargetMesh) {
+                        // Move selected photo to front-and-center
                         const desiredWorldPos = new THREE.Vector3(0, 1.5, CONFIG.camera.z - 8);
                         const invMatrix = new THREE.Matrix4().copy(mainGroup.matrixWorld).invert();
                         target.copy(desiredWorldPos.applyMatrix4(invMatrix));
                         opacity = 1.0;
                     } else {
+                        // Background particles
                         target.copy(this.posScatter);
+                        
                         if (this.type === 'PHOTO' && this.isDrawn) {
+                            // Previously drawn photos float further back
                             target.multiplyScalar(2.0); 
                             opacity = 0.05; 
                         } else if (this.type === 'PHOTO') {
+                            // Undrawn photos
                             opacity = 0.4;
                         } else {
-                            opacity = 0.02; 
+                            // Dust/Ornaments
+                            opacity = 0.02; // Very faint background
                         }
                     }
                 }
                 
-                // Opacity Update
+                // 2. Opacity Update
                 const updateMaterialOpacity = (obj, targetOp) => {
                     if (obj.material && obj.material.transparent) {
                         obj.material.opacity = THREE.MathUtils.lerp(obj.material.opacity, targetOp, 5 * dt);
@@ -342,11 +444,11 @@
                     updateMaterialOpacity(this.mesh, opacity);
                 }
 
-                // Movement Easing
+                // 3. Movement Easing
                 const lerpSpeed = (mode === 'FOCUS' && this.mesh === focusTargetMesh) ? 4.0 : 2.0; 
                 this.mesh.position.lerp(target, lerpSpeed * dt);
 
-                // Rotation Logic
+                // 4. Rotation Logic
                 if (mode === 'SCATTER') {
                     this.mesh.rotation.x += this.spinSpeed.x * dt;
                     this.mesh.rotation.y += this.spinSpeed.y * dt;
@@ -358,13 +460,14 @@
                 }
                 
                 if (mode === 'FOCUS' && this.mesh === focusTargetMesh) {
+                    // Counter-rotate
                     const targetWorldQ = camera.quaternion.clone();
                     const parentInvQ = mainGroup.quaternion.clone().invert();
                     const targetLocalQ = parentInvQ.multiply(targetWorldQ);
                     this.mesh.quaternion.slerp(targetLocalQ, 6 * dt);
                 }
 
-                // Scale Logic
+                // 5. Scale Logic
                 let s = this.baseScale;
                 if (this.isDust) {
                     const pulseScale = (0.8 + 0.4 * Math.sin(clock.elapsedTime * 4 + this.mesh.id));
@@ -394,47 +497,29 @@
             createTextures();
             createParticles(); 
             createDust();     
-            createDefaultPhotos(); 
+            
+            // Load photos from storage or default
+            await loadPhotosFromStorage();
+
             setupPostProcessing();
             setupEvents();
+            setupGalleryUI();
             
-            // 1. Start Animation Immediately (Do not wait for AI)
+            // Start Animation Loop Immediately
             animate();
             
-            // 2. Force remove loader after 1.5 seconds regardless of network status
-            // This ensures the user sees the "working" app even if AI is blocked in China.
-            setTimeout(() => {
-                const loader = document.getElementById('loader');
-                if (loader) {
-                    loader.style.opacity = 0;
-                    setTimeout(() => loader.remove(), 800);
-                }
-            }, 1500);
-
-            // 3. Attempt to load AI in the background
-            // We do NOT await this. If it hangs, the app still runs.
-            statusIndicator.textContent = "Connecting to AI...";
-            
-            // Add a timeout to the AI promise itself to stop it from hanging forever in the background
-            const aiPromise = initMediaPipe();
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error("AI_TIMEOUT")), 6000)
-            );
-
+            // Init MediaPipe
             try {
-                await Promise.race([aiPromise, timeoutPromise]);
-                console.log("AI Ready");
-                statusIndicator.textContent = "Gesture Control Ready";
-            } catch (error) {
-                console.warn("AI Init failed or timed out:", error);
-                // Fallback message
-                if (error.message === "AI_TIMEOUT" || error.message.includes("fetch")) {
-                    statusIndicator.textContent = "Network Blocked - Auto Mode";
-                } else {
-                    statusIndicator.textContent = "Camera Unavailable - View Only";
-                }
-                statusIndicator.style.color = "#ff8888";
+                await initMediaPipe();
+            } catch (e) {
+                console.error("MediaPipe failed to load:", e);
+                statusIndicator.textContent = "Gesture control unavailable";
             }
+            
+            // Hide Loader
+            const loader = document.getElementById('loader');
+            loader.style.opacity = 0;
+            setTimeout(() => loader.remove(), 800);
         }
 
         function initThree() {
@@ -600,6 +685,89 @@
             }
         }
 
+        // --- GALLERY & STORAGE LOGIC ---
+        
+        async function loadPhotosFromStorage() {
+            const stored = localStorage.getItem(CONFIG.storageKey);
+            if (stored) {
+                try {
+                    const photos = JSON.parse(stored);
+                    if (photos.length > 0) {
+                        for (const p of photos) {
+                            await addPhotoToSceneFromData(p.data, p.name, p.id);
+                        }
+                        return;
+                    }
+                } catch (e) {
+                    console.error("Failed to load photos", e);
+                }
+            }
+            // If no photos loaded, create default
+            createDefaultPhotos();
+        }
+
+        function savePhotoToStorage(id, name, dataUrl) {
+            let photos = [];
+            try {
+                const stored = localStorage.getItem(CONFIG.storageKey);
+                if (stored) photos = JSON.parse(stored);
+            } catch(e) {}
+            
+            photos.push({ id, name, data: dataUrl });
+            try {
+                localStorage.setItem(CONFIG.storageKey, JSON.stringify(photos));
+                updateGalleryUI();
+            } catch (e) {
+                alert("Storage full! Please delete some photos.");
+            }
+        }
+        
+        function removePhotoFromStorage(id) {
+            try {
+                const stored = localStorage.getItem(CONFIG.storageKey);
+                if (stored) {
+                    let photos = JSON.parse(stored);
+                    photos = photos.filter(p => p.id !== id);
+                    localStorage.setItem(CONFIG.storageKey, JSON.stringify(photos));
+                    
+                    // Remove from Scene
+                    removePhotoFromScene(id);
+                    updateGalleryUI();
+                }
+            } catch(e) {}
+        }
+        
+        function removePhotoFromScene(id) {
+            // Find particle index
+            const index = photoParticles.findIndex(p => p.id === id);
+            if (index !== -1) {
+                const p = photoParticles[index];
+                
+                // Remove mesh from Group
+                photoMeshGroup.remove(p.mesh);
+                
+                // Clean up memory
+                p.mesh.traverse(c => {
+                    if (c.geometry) c.geometry.dispose();
+                    if (c.material) {
+                         if(c.material.map) c.material.map.dispose();
+                         c.material.dispose();
+                    }
+                });
+                
+                // Remove from arrays
+                photoParticles.splice(index, 1);
+                const sysIndex = particleSystem.indexOf(p);
+                if (sysIndex !== -1) particleSystem.splice(sysIndex, 1);
+                
+                // Reset focus if needed
+                if (STATE.focusTarget === p.mesh) {
+                    STATE.mode = 'TREE';
+                    STATE.focusTarget = null;
+                }
+            }
+        }
+
         function createDefaultPhotos() {
             const canvas = document.createElement('canvas');
             canvas.width = 512; canvas.height = 512;
@@ -611,12 +779,27 @@
             ctx.fillText("JOYEUX", 256, 230);
             ctx.fillText("NOEL", 256, 300);
             
-            const tex = new THREE.CanvasTexture(canvas);
-            tex.colorSpace = THREE.SRGBColorSpace;
-            addPhotoToScene(tex, "Our Memory");
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            // Default photos are not saved to localStorage to allow user to delete them permanently if they want, 
+            // but for this logic, we just add it to scene without ID so it can't be deleted via UI (or add it with a special ID).
+            // Let's add it as a "virtual" photo for now.
+            new THREE.TextureLoader().load(dataUrl, (t) => {
+                t.colorSpace = THREE.SRGBColorSpace;
+                addPhotoToScene(t, "Our Memory", "default");
+            });
+        }
+        
+        function addPhotoToSceneFromData(dataUrl, name, id) {
+            return new Promise((resolve) => {
+                new THREE.TextureLoader().load(dataUrl, (t) => {
+                    t.colorSpace = THREE.SRGBColorSpace;
+                    addPhotoToScene(t, name, id);
+                    resolve();
+                });
+            });
         }
 
-        function addPhotoToScene(texture, name = "Untitled") {
+        function addPhotoToScene(texture, name = "Untitled", id = null) {
             const frameGeo = new THREE.BoxGeometry(1.4, 1.4, 0.05);
             const frameMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.champagneGold, metalness: 1.0, roughness: 0.1, transparent: true });
             const frame = new THREE.Mesh(frameGeo, frameMat);
@@ -635,42 +818,144 @@
             
             photoMeshGroup.add(group);
             
-            // Pass name to Particle
-            const p = new Particle(group, 'PHOTO', false, name);
+            // Pass name and ID to Particle
+            const p = new Particle(group, 'PHOTO', false, name, id);
             particleSystem.push(p);
             photoParticles.push(p);
         }
         
-        function handleImageUpload(e) {
+        // --- IMAGE COMPRESSION UTIL ---
+        function compressImage(file, maxWidth = 800) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+                        
+                        if (width > height) {
+                            if (width > maxWidth) {
+                                height *= maxWidth / width;
+                                width = maxWidth;
+                            }
+                        } else {
+                            if (height > maxWidth) {
+                                width *= maxWidth / height;
+                                height = maxWidth;
+                            }
+                        }
+                        
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.7)); // Compress to 0.7 quality
+                    };
+                };
+            });
+        }
+        
+        async function handleNewPhotoUpload(e) {
             const files = e.target.files;
             if(!files.length) return;
-            Array.from(files).forEach(f => {
+            
+            const status = document.getElementById('status-indicator');
+            status.textContent = "Processing photos...";
+            
+            for (const f of Array.from(files)) {
                 // Extract name without extension
                 const name = f.name.replace(/\.[^/.]+$/, "");
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    new THREE.TextureLoader().load(ev.target.result, (t) => {
-                        t.colorSpace = THREE.SRGBColorSpace;
-                        addPhotoToScene(t, name);
-                    });
-                }
-                reader.readAsDataURL(f);
+                const id = Date.now() + Math.random().toString(36).substr(2, 9);
+                
+                // Compress and Get Data URL
+                const dataUrl = await compressImage(f);
+                
+                // Save
+                savePhotoToStorage(id, name, dataUrl);
+                
+                // Add to Scene
+                await addPhotoToSceneFromData(dataUrl, name, id);
+            }
+            
+            status.textContent = "Photos Added!";
+            setTimeout(() => status.textContent = "Waiting...", 2000);
+            
+            // Reset input
+            e.target.value = '';
+        }
+
+        // --- GALLERY UI ---
+        function setupGalleryUI() {
+            const openBtn = document.getElementById('open-gallery-btn');
+            const closeBtn = document.getElementById('close-gallery-btn');
+            const modal = document.getElementById('gallery-modal');
+            const input = document.getElementById('gallery-input');
+            
+            openBtn.addEventListener('click', () => {
+                modal.classList.add('active');
+                updateGalleryUI();
+            });
+            
+            closeBtn.addEventListener('click', () => {
+                modal.classList.remove('active');
+            });
+            
+            input.addEventListener('change', handleNewPhotoUpload);
+        }
+        
+        function updateGalleryUI() {
+            const grid = document.getElementById('gallery-grid');
+            grid.innerHTML = '';
+            
+            let photos = [];
+            try {
+                const stored = localStorage.getItem(CONFIG.storageKey);
+                if (stored) photos = JSON.parse(stored);
+            } catch(e) {}
+            
+            if (photos.length === 0) {
+                grid.innerHTML = '<div style="color:#666; width:100%; text-align:center;">No saved photos.</div>';
+                return;
+            }
+            
+            photos.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'gallery-item';
+                
+                const img = document.createElement('img');
+                img.src = p.data;
+                
+                const nameTag = document.createElement('div');
+                nameTag.className = 'gallery-name';
+                nameTag.textContent = p.name;
+                
+                const delBtn = document.createElement('button');
+                delBtn.className = 'delete-btn';
+                delBtn.innerHTML = '×';
+                delBtn.onclick = () => {
+                    if(confirm('Delete this memory?')) {
+                        removePhotoFromStorage(p.id);
+                    }
+                };
+                
+                item.appendChild(img);
+                item.appendChild(nameTag);
+                item.appendChild(delBtn);
+                grid.appendChild(item);
             });
         }
 
-        // --- MEDIAPIPE (FIXED) ---
+        // --- MEDIAPIPE ---
         async function initMediaPipe() {
             video = document.getElementById('webcam');
             
-            // 1. More robust FilesetResolver
-            // Note: We are using a CDN that works globally, but might be slow in some regions.
             const vision = await FilesetResolver.forVisionTasks(
                 "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
             );
-
-            // 2. Initialize Landmarker
-            // Note: This fetches the model (~10MB) from Google Cloud Storage.
-            // If this fails (due to GFW or network), the outer Promise.race timeout will catch it.
             handLandmarker = await HandLandmarker.createFromOptions(vision, {
                 baseOptions: {
                     modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
@@ -680,31 +965,22 @@
                 numHands: 1
             });
             
-            // 3. Robust Camera Access
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                    video.srcObject = stream;
-                    
-                    return new Promise((resolve) => {
-                        video.addEventListener("loadeddata", () => {
-                            document.getElementById('webcam-wrapper').style.opacity = 0.4;
-                            predictWebcam();
-                            resolve();
-                        });
-                    });
-                } catch (err) {
-                    console.error("Camera access denied:", err);
-                    throw err;
-                }
+            if (navigator.mediaDevices?.getUserMedia) {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                video.addEventListener("loadeddata", () => {
+                    document.getElementById('webcam-wrapper').style.opacity = 0.4;
+                    predictWebcam();
+                });
             } else {
-                 throw new Error("Webcam not supported or blocked by browser/protocol.");
+                 console.warn("Webcam not available.");
+                 statusIndicator.textContent = 'Webcam unavailable. Controls disabled.';
             }
         }
 
         let lastVideoTime = -1;
         async function predictWebcam() {
-            if (video && video.currentTime !== lastVideoTime) {
+            if (video.currentTime !== lastVideoTime) {
                 lastVideoTime = video.currentTime;
                 if (handLandmarker) {
                     const now = performance.now();
@@ -756,7 +1032,8 @@
                 // --- STATE MACHINE ---
 
                 if (STATE.mode === 'END_GAME') {
-                    // Lock to END_GAME state
+                    // Lock to END_GAME state, maybe allow rotation?
+                    // For now, keep it simple.
                 } 
                 else if (STATE.mode === 'FOCUS') {
                     // STICKY FOCUS: Only return to tree if explicit FIST
@@ -855,7 +1132,8 @@
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 composer.setSize(window.innerWidth, window.innerHeight);
             });
-            document.getElementById('file-input').addEventListener('change', handleImageUpload);
+            // Old file input not used in new flow directly, we use gallery logic
+            // document.getElementById('file-input').addEventListener('change', handleImageUpload);
             
             window.addEventListener('keydown', (e) => {
                 if (e.key.toLowerCase() === 'h') {
